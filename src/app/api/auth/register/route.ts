@@ -32,8 +32,8 @@ export async function POST(req: Request) {
     )
 
     return NextResponse.json({ user: rows[0] }, { status: 201 })
-  } catch (err) {
+  } catch (err: any) {
     console.error('[register]', err)
-    return NextResponse.json({ error: 'Server error' }, { status: 500 })
+    return NextResponse.json({ error: err?.message ?? 'Server error', code: err?.code }, { status: 500 })
   }
 }

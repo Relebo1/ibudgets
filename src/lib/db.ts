@@ -1,5 +1,7 @@
 import mysql from 'mysql2/promise'
 
+const isProduction = !!process.env.DB_HOST && process.env.DB_HOST !== 'localhost'
+
 const pool = mysql.createPool({
   host: process.env.DB_HOST ?? 'localhost',
   user: process.env.DB_USER ?? 'root',
@@ -9,7 +11,7 @@ const pool = mysql.createPool({
   waitForConnections: true,
   connectionLimit: 10,
   queueLimit: 0,
-  ssl: process.env.DB_SSL === 'true' ? { rejectUnauthorized: true } : undefined,
+  ssl: isProduction ? { rejectUnauthorized: true } : undefined,
 })
 
 export default pool

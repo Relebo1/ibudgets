@@ -4,7 +4,7 @@ import { usePathname, useRouter } from 'next/navigation'
 import clsx from 'clsx'
 import {
   LayoutDashboard, PieChart, CreditCard, PiggyBank,
-  GraduationCap, Brain, User, Settings, LogOut, DollarSign, TrendingDown, FlaskConical, Wallet,
+  GraduationCap, User, Settings, LogOut, DollarSign, TrendingDown, FlaskConical, Wallet,
 } from 'lucide-react'
 import { useSession } from '@/lib/SessionProvider'
 
@@ -17,7 +17,6 @@ const nav = [
   { href: '/dashboard/debts', label: 'Debts', icon: TrendingDown },
   { href: '/dashboard/simulator', label: 'Simulator', icon: FlaskConical },
   { href: '/dashboard/modules', label: 'Learn', icon: GraduationCap },
-  { href: '/dashboard/quizzes', label: 'Quizzes', icon: Brain },
 ]
 
 const bottom = [

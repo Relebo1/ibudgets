@@ -33,7 +33,7 @@ export default function LoginPage() {
       const data = await res.json()
       if (!res.ok) { setError(data.error ?? 'Login failed'); setLoading(false); return }
       setUser(data.user)
-      router.push('/dashboard')
+      router.push(data.user.is_admin ? '/admin' : '/dashboard')
     } catch {
       setError('Could not connect to server')
       setLoading(false)

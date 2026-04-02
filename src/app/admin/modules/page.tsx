@@ -5,7 +5,7 @@ import { Plus, X, Trash2, Pencil, BookOpen } from 'lucide-react'
 const DIFFICULTIES = ['Beginner', 'Intermediate', 'Advanced']
 const COLORS = ['#22c55e', '#3b82f6', '#f97316', '#a855f7', '#ec4899', '#14b8a6', '#f59e0b', '#ef4444']
 
-const empty = { title: '', description: '', category: '', duration: '30 min', difficulty: 'Beginner', xpReward: '100', lessons: '5', color: '#22c55e' }
+const empty = { title: '', description: '', youtube_url: '', category: '', duration: '30 min', difficulty: 'Beginner', xpReward: '100', lessons: '5', color: '#22c55e' }
 
 export default function AdminModulesPage() {
   const [modules, setModules] = useState<any[]>([])
@@ -22,7 +22,7 @@ export default function AdminModulesPage() {
   const openAdd = () => { setEditing(null); setForm(empty); setShowModal(true) }
   const openEdit = (m: any) => {
     setEditing(m)
-    setForm({ title: m.title, description: m.description, category: m.category, duration: m.duration, difficulty: m.difficulty, xpReward: String(m.xp_reward), lessons: String(m.lessons), color: m.color })
+    setForm({ title: m.title, description: m.description, youtube_url: m.youtube_url ?? '', category: m.category, duration: m.duration, difficulty: m.difficulty, xpReward: String(m.xp_reward), lessons: String(m.lessons), color: m.color })
     setShowModal(true)
   }
 
@@ -140,6 +140,10 @@ export default function AdminModulesPage() {
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Description</label>
                 <textarea className="input resize-none" rows={2} placeholder="Brief description..." value={form.description} onChange={e => set('description', e.target.value)} />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">YouTube URL</label>
+                <input className="input" placeholder="https://www.youtube.com/watch?v=..." value={form.youtube_url} onChange={e => set('youtube_url', e.target.value)} />
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>

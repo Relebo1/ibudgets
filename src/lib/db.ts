@@ -216,6 +216,7 @@ export async function initDB() {
       `ALTER TABLE users ADD COLUMN last_login TIMESTAMP NULL DEFAULT NULL`,
       `ALTER TABLE users ADD COLUMN is_admin TINYINT(1) DEFAULT 0`,
       `ALTER TABLE debts ADD COLUMN color VARCHAR(20) DEFAULT '#ef4444'`,
+      `ALTER TABLE modules ADD COLUMN youtube_url VARCHAR(500) DEFAULT ''`,
     ]
     for (const sql of migrations) {
       await conn.execute(sql).catch(() => {}) // silently skip if column already exists

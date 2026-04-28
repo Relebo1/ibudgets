@@ -5,6 +5,8 @@ import { Plus, X, Trash2, Pencil, Brain, ChevronDown, ChevronUp } from 'lucide-r
 const COLORS = ['#22c55e', '#3b82f6', '#f97316', '#a855f7', '#ec4899', '#14b8a6', '#f59e0b', '#ef4444']
 const emptyQuiz = { moduleId: '', title: '', description: '', xpReward: '100', timeLimit: '10', color: '#22c55e' }
 const emptyQ = { question: '', options: ['', '', '', ''], correctIndex: 0, explanation: '' }
+const MIN_OPTIONS = 2
+const MAX_OPTIONS = 6
 
 export default function AdminQuizzesPage() {
   const [modules, setModules] = useState<any[]>([])
@@ -18,6 +20,7 @@ export default function AdminQuizzesPage() {
   const [qForm, setQForm] = useState(emptyQ)
   const [deleteQuizId, setDeleteQuizId] = useState<number | null>(null)
   const [deleteQId, setDeleteQId] = useState<{ id: number; quizId: number } | null>(null)
+  const [closeAfterSave, setCloseAfterSave] = useState(false)
 
   useEffect(() => {
     fetch('/api/admin/modules').then(r => r.json()).then(setModules)
@@ -67,12 +70,18 @@ export default function AdminQuizzesPage() {
       const res = await fetch('/api/admin/questions', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: editingQ.id, ...body }) })
       const updated = await res.json()
       setQuizzes(prev => prev.map(q => q.id === showQModal ? { ...q, questions: q.questions.map((qq: any) => qq.id === editingQ.id ? updated : qq) } : q))
+      setShowQModal(null)
     } else {
       const res = await fetch('/api/admin/questions', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
       const created = await res.json()
       setQuizzes(prev => prev.map(q => q.id === showQModal ? { ...q, questions: [...(q.questions ?? []), created] } : q))
+      if (closeAfterSave) {
+        setShowQModal(null)
+      } else {
+        setQForm(emptyQ) // reset for next question
+      }
     }
-    setShowQModal(null)
+    setCloseAfterSave(false)
   }
 
   const handleDeleteQ = async (id: number, quizId: number) => {
@@ -82,6 +91,12 @@ export default function AdminQuizzesPage() {
   }
 
   const setOption = (i: number, v: string) => setQForm(f => { const opts = [...f.options]; opts[i] = v; return { ...f, options: opts } })
+  const addOption = () => setQForm(f => f.options.length < MAX_OPTIONS ? { ...f, options: [...f.options, ''] } : f)
+  const removeOption = (i: number) => setQForm(f => {
+    if (f.options.length <= MIN_OPTIONS) return f
+    const opts = f.options.filter((_, idx) => idx !== i)
+    return { ...f, options: opts, correctIndex: f.correctIndex >= opts.length ? 0 : f.correctIndex }
+  })
 
   return (
     <div className="space-y-6 max-w-5xl mx-auto">
@@ -241,9 +256,16 @@ export default function AdminQuizzesPage() {
                 <textarea className="input resize-none" rows={2} placeholder="Enter the question..." value={qForm.question} onChange={e => setQForm(f => ({ ...f, question: e.target.value }))} required />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
-                  Answer Options <span className="text-xs text-gray-400 font-normal">(click letter to mark correct)</span>
-                </label>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                    Answer Options <span className="text-xs text-gray-400 font-normal">(click letter to mark correct)</span>
+                  </label>
+                  {qForm.options.length < MAX_OPTIONS && (
+                    <button type="button" onClick={addOption} className="text-xs text-brand-600 dark:text-brand-400 flex items-center gap-1 hover:underline">
+                      <Plus className="w-3 h-3" /> Add option
+                    </button>
+                  )}
+                </div>
                 <div className="space-y-2">
                   {qForm.options.map((opt, i) => (
                     <div key={i} className="flex items-center gap-2">
@@ -252,17 +274,30 @@ export default function AdminQuizzesPage() {
                         {String.fromCharCode(65 + i)}
                       </button>
                       <input className="input" placeholder={`Option ${String.fromCharCode(65 + i)}`} value={opt} onChange={e => setOption(i, e.target.value)} required />
+                      {qForm.options.length > MIN_OPTIONS && (
+                        <button type="button" onClick={() => removeOption(i)} className="w-7 h-7 flex-shrink-0 flex items-center justify-center text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30 rounded-lg transition-all">
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      )}
                     </div>
                   ))}
                 </div>
+                <p className="text-xs text-gray-400 mt-1.5">{qForm.options.length}/{MAX_OPTIONS} options · {String.fromCharCode(65 + qForm.correctIndex)} is correct</p>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Explanation</label>
-                <textarea className="input resize-none" rows={2} placeholder="Explain why the answer is correct..." value={qForm.explanation} onChange={e => setQForm(f => ({ ...f, explanation: e.target.value }))} />
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Explanation <span className="text-xs text-gray-400 font-normal">(why is this the correct answer?)</span></label>
+                <textarea className="input resize-none" rows={2} placeholder="Explain why the correct answer is right..." value={qForm.explanation} onChange={e => setQForm(f => ({ ...f, explanation: e.target.value }))} />
               </div>
               <div className="flex gap-3 pt-2">
-                <button type="button" onClick={() => setShowQModal(null)} className="btn-secondary flex-1">Cancel</button>
-                <button type="submit" className="btn-primary flex-1">{editingQ ? 'Save Question' : 'Add Question'}</button>
+                <button type="button" onClick={() => setShowQModal(null)} className="btn-secondary flex-1">Done</button>
+                {!editingQ && (
+                  <button type="submit" onClick={() => setCloseAfterSave(false)} className="btn-secondary flex-1 flex items-center justify-center gap-1.5">
+                    <Plus className="w-4 h-4" /> Save & Add Another
+                  </button>
+                )}
+                <button type="submit" onClick={() => setCloseAfterSave(true)} className="btn-primary flex-1">
+                  {editingQ ? 'Save Changes' : 'Save & Close'}
+                </button>
               </div>
             </form>
           </div>

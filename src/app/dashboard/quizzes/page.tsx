@@ -1,6 +1,6 @@
 'use client'
 import { useEffect, useState } from 'react'
-import { X, CheckCircle, XCircle, HelpCircle, Clock, Zap, RotateCcw, Trophy, ChevronRight } from 'lucide-react'
+import { X, CheckCircle, XCircle, HelpCircle, Clock, Zap, RotateCcw, Trophy, ChevronRight, AlertCircle } from 'lucide-react'
 import { useSession } from '@/lib/SessionProvider'
 
 export default function QuizzesPage() {
@@ -10,19 +10,43 @@ export default function QuizzesPage() {
   const [currentQ, setCurrentQ] = useState(0)
   const [selected, setSelected] = useState<number | null>(null)
   const [answered, setAnswered] = useState(false)
-  const [answers, setAnswers] = useState<number[]>([]) // tracks all picked answers
+  const [answers, setAnswers] = useState<number[]>([])
   const [finished, setFinished] = useState(false)
+  const [timeLeft, setTimeLeft] = useState<number | null>(null)
+  const [timerActive, setTimerActive] = useState(false)
 
   useEffect(() => {
     if (!user) return
     fetch(`/api/quizzes?userId=${user.id}`).then(r => r.json()).then(setQuizzes)
   }, [user])
 
+  // Timer effect
+  useEffect(() => {
+    if (!timerActive || timeLeft === null || timeLeft <= 0) return
+    const interval = setInterval(() => {
+      setTimeLeft(prev => {
+        if (prev === null || prev <= 1) {
+          setTimerActive(false)
+          return 0
+        }
+        return prev - 1
+      })
+    }, 1000)
+    return () => clearInterval(interval)
+  }, [timerActive, timeLeft])
+
   if (!user) return null
 
   const startQuiz = (quiz: any) => {
-    setActiveQuiz(quiz); setCurrentQ(0); setSelected(null)
-    setAnswered(false); setAnswers([]); setFinished(false)
+    if (!quiz.questions || quiz.questions.length === 0) return
+    setActiveQuiz(quiz)
+    setCurrentQ(0)
+    setSelected(null)
+    setAnswered(false)
+    setAnswers([])
+    setFinished(false)
+    setTimeLeft(quiz.time_limit * 60)
+    setTimerActive(true)
   }
 
   const handleAnswer = (idx: number) => {
@@ -38,6 +62,7 @@ export default function QuizzesPage() {
     if (isLast) {
       const correct = updatedAnswers.filter((a, i) => a === activeQuiz.questions[i].correct_index).length
       const finalScore = Math.round(correct / activeQuiz.questions.length * 100)
+      setTimerActive(false)
       await fetch('/api/quizzes', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -48,15 +73,28 @@ export default function QuizzesPage() {
       setFinished(true)
     } else {
       setAnswers(updatedAnswers)
-      setCurrentQ(c => c + 1); setSelected(null); setAnswered(false)
+      setCurrentQ(c => c + 1)
+      setSelected(null)
+      setAnswered(false)
     }
+  }
+
+  const formatTime = (seconds: number) => {
+    const mins = Math.floor(seconds / 60)
+    const secs = seconds % 60
+    return `${mins}:${secs.toString().padStart(2, '0')}`
   }
 
   // ── Quiz in progress ──────────────────────────────────────────────────────
   if (activeQuiz && !finished) {
     const q = activeQuiz.questions[currentQ]
+    if (!q) return null
+
     const progress = (currentQ / activeQuiz.questions.length) * 100
     const isCorrect = selected === q.correct_index
+    const timeWarning = timeLeft !== null && timeLeft < 60
+    const timeExpired = timeLeft === 0
+
     return (
       <div className="max-w-2xl mx-auto">
         <div className="card p-5 sm:p-8">
@@ -70,9 +108,19 @@ export default function QuizzesPage() {
                 <p className="text-xs text-gray-400">Question {currentQ + 1} of {activeQuiz.questions.length}</p>
               </div>
             </div>
-            <button onClick={() => setActiveQuiz(null)} className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-gray-600 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 px-3 py-1.5 rounded-lg transition-colors">
-              <X className="w-3.5 h-3.5" /> Exit
-            </button>
+            <div className="flex items-center gap-3">
+              <div className={`flex items-center gap-1.5 text-sm font-semibold px-3 py-1.5 rounded-lg ${
+                timeExpired ? 'bg-red-100 dark:bg-red-950/40 text-red-600 dark:text-red-400' :
+                timeWarning ? 'bg-amber-100 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400' :
+                'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400'
+              }`}>
+                <Clock className="w-4 h-4" />
+                {timeLeft !== null ? formatTime(timeLeft) : '—'}
+              </div>
+              <button onClick={() => { setActiveQuiz(null); setTimerActive(false) }} className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-gray-600 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 px-3 py-1.5 rounded-lg transition-colors">
+                <X className="w-3.5 h-3.5" /> Exit
+              </button>
+            </div>
           </div>
 
           <div className="h-2 bg-gray-100 dark:bg-gray-800 rounded-full mb-8 overflow-hidden">
@@ -91,7 +139,7 @@ export default function QuizzesPage() {
                 else style = 'border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-900 opacity-40 cursor-default'
               }
               return (
-                <button key={i} onClick={() => handleAnswer(i)} disabled={answered}
+                <button key={i} onClick={() => handleAnswer(i)} disabled={answered || timeExpired}
                   className={`w-full text-left px-5 py-4 rounded-xl border-2 transition-all duration-150 text-sm font-medium flex items-center justify-between ${style}`}>
                   <span><span className="mr-3 text-gray-400 font-bold">{String.fromCharCode(65 + i)}.</span>{opt}</span>
                   {Icon && <Icon className={`w-5 h-5 flex-shrink-0 ${i === q.correct_index ? 'text-green-600' : 'text-red-500'}`} />}
@@ -100,6 +148,16 @@ export default function QuizzesPage() {
             })}
           </div>
 
+          {timeExpired && (
+            <div className="flex items-start gap-3 bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 px-4 py-3 rounded-xl mb-4">
+              <AlertCircle className="w-5 h-5 flex-shrink-0 mt-0.5" />
+              <div>
+                <p className="font-semibold text-sm">Time's up!</p>
+                <p className="text-xs mt-1">Your quiz has ended. Click "See Results" to view your score.</p>
+              </div>
+            </div>
+          )}
+
           {answered && (
             <div className={`p-4 rounded-xl mb-4 flex items-start gap-3 ${isCorrect ? 'bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800' : 'bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800'}`}>
               {isCorrect
@@ -107,14 +165,14 @@ export default function QuizzesPage() {
                 : <XCircle className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />}
               <div>
                 <p className="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-0.5">
-                  {isCorrect ? 'Correct!' : `Incorrect — correct answer: ${String.fromCharCode(65 + q.correct_index)}. ${q.options[q.correct_index]}`}
+                  {isCorrect ? '✓ Correct!' : `✗ Incorrect — correct answer: ${String.fromCharCode(65 + q.correct_index)}. ${q.options[q.correct_index]}`}
                 </p>
                 {q.explanation && <p className="text-sm text-gray-600 dark:text-gray-400">{q.explanation}</p>}
               </div>
             </div>
           )}
 
-          {answered && (
+          {(answered || timeExpired) && (
             <button onClick={handleNext} className="btn-primary w-full flex items-center justify-center gap-2">
               {currentQ + 1 >= activeQuiz.questions.length ? 'See Results' : <>Next Question <ChevronRight className="w-4 h-4" /></>}
             </button>
@@ -237,31 +295,52 @@ export default function QuizzesPage() {
       <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Available Quizzes</h2>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        {quizzes.map((q: any) => (
-          <div key={q.id} className="card card-hover p-5 flex flex-col">
-            <div className="flex items-start justify-between mb-3">
-              <div className="w-12 h-12 rounded-2xl flex items-center justify-center" style={{ background: q.color + '20' }}>
-                <div className="w-5 h-5 rounded-full" style={{ background: q.color }} />
+        {quizzes.map((q: any) => {
+          const isLocked = !q.questions || q.questions.length === 0
+          return (
+            <div key={q.id} className={`card card-hover p-5 flex flex-col ${isLocked ? 'opacity-60' : ''}`}>
+              <div className="flex items-start justify-between mb-3">
+                <div className="w-12 h-12 rounded-2xl flex items-center justify-center" style={{ background: q.color + '20' }}>
+                  <div className="w-5 h-5 rounded-full" style={{ background: q.color }} />
+                </div>
+                {q.completed == 1 && (
+                  <span className={`badge flex items-center gap-1 ${q.score >= 70 ? 'bg-green-50 text-green-700 dark:bg-green-900/40 dark:text-green-400' : 'bg-orange-50 text-orange-700 dark:bg-orange-900/40 dark:text-orange-400'}`}>
+                    <CheckCircle className="w-3 h-3" /> {q.score}%
+                  </span>
+                )}
               </div>
-              {q.completed == 1 && (
-                <span className={`badge flex items-center gap-1 ${q.score >= 70 ? 'bg-green-50 text-green-700 dark:bg-green-900/40 dark:text-green-400' : 'bg-orange-50 text-orange-700 dark:bg-orange-900/40 dark:text-orange-400'}`}>
-                  <CheckCircle className="w-3 h-3" /> {q.score}%
-                </span>
-              )}
+              <h3 className="font-semibold text-gray-900 dark:text-gray-100 mb-1">{q.title}</h3>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mb-3 flex-1">{q.description}</p>
+              <div className="flex items-center gap-3 text-xs text-gray-400 mb-4">
+                <span className="flex items-center gap-1"><HelpCircle className="w-3 h-3" /> {q.questions?.length ?? 0} questions</span>
+                <span className="flex items-center gap-1"><Clock className="w-3 h-3" /> {q.time_limit} min</span>
+                <span className="flex items-center gap-1 text-purple-600 font-medium"><Zap className="w-3 h-3" /> +{q.xp_reward}</span>
+              </div>
+              <button onClick={() => startQuiz(q)} disabled={isLocked}
+                className={`w-full py-2.5 rounded-xl text-sm font-medium transition-all duration-150 active:scale-95 flex items-center justify-center gap-1.5 ${
+                  isLocked
+                    ? 'bg-gray-100 dark:bg-gray-800 text-gray-400 cursor-not-allowed'
+                    : q.completed == 1
+                    ? 'bg-gray-100 dark:bg-gray-800 text-gray-600 hover:bg-gray-200'
+                    : 'bg-gray-900 hover:bg-gray-800 text-white'
+                }`}>
+                {isLocked ? (
+                  <>
+                    <AlertCircle className="w-4 h-4" /> No Questions
+                  </>
+                ) : q.completed == 1 ? (
+                  <>
+                    <RotateCcw className="w-4 h-4" /> Retake Quiz
+                  </>
+                ) : (
+                  <>
+                    Start Quiz <ChevronRight className="w-4 h-4" />
+                  </>
+                )}
+              </button>
             </div>
-            <h3 className="font-semibold text-gray-900 dark:text-gray-100 mb-1">{q.title}</h3>
-            <p className="text-xs text-gray-500 dark:text-gray-400 mb-3 flex-1">{q.description}</p>
-            <div className="flex items-center gap-3 text-xs text-gray-400 mb-4">
-              <span className="flex items-center gap-1"><HelpCircle className="w-3 h-3" /> {q.questions?.length ?? 0} questions</span>
-              <span className="flex items-center gap-1"><Clock className="w-3 h-3" /> {q.time_limit} min</span>
-              <span className="flex items-center gap-1 text-purple-600 font-medium"><Zap className="w-3 h-3" /> +{q.xp_reward}</span>
-            </div>
-            <button onClick={() => startQuiz(q)}
-              className={`w-full py-2.5 rounded-xl text-sm font-medium transition-all duration-150 active:scale-95 flex items-center justify-center gap-1.5 ${q.completed == 1 ? 'bg-gray-100 dark:bg-gray-800 text-gray-600 hover:bg-gray-200' : 'bg-gray-900 hover:bg-gray-800 text-white'}`}>
-              {q.completed == 1 ? <><RotateCcw className="w-4 h-4" /> Retake Quiz</> : <>Start Quiz <ChevronRight className="w-4 h-4" /></>}
-            </button>
-          </div>
-        ))}
+          )
+        })}
       </div>
     </div>
   )

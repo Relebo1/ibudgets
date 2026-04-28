@@ -25,20 +25,20 @@ export async function GET(req: Request) {
 }
 
 export async function POST(req: Request) {
-  const { moduleId, lessonId, title, description, xpReward, timeLimit, color } = await req.json()
+  const { moduleId, title, description, xpReward, timeLimit, color } = await req.json()
   const [result] = await pool.execute<ResultSetHeader>(
-    'INSERT INTO quizzes (module_id, lesson_id, title, description, xp_reward, time_limit, color) VALUES (?,?,?,?,?,?,?)',
-    [moduleId, lessonId ?? null, title, description, xpReward ?? 100, timeLimit ?? 10, color ?? '#22c55e']
+    'INSERT INTO quizzes (module_id, title, description, xp_reward, time_limit, color) VALUES (?,?,?,?,?,?)',
+    [moduleId, title, description, xpReward ?? 100, timeLimit ?? 10, color ?? '#22c55e']
   )
   const [rows] = await pool.execute<RowDataPacket[]>('SELECT * FROM quizzes WHERE id = ?', [result.insertId])
   return NextResponse.json({ ...rows[0], questions: [] }, { status: 201 })
 }
 
 export async function PUT(req: Request) {
-  const { id, lessonId, title, description, xpReward, timeLimit, color } = await req.json()
+  const { id, moduleId, title, description, xpReward, timeLimit, color } = await req.json()
   await pool.execute(
-    'UPDATE quizzes SET lesson_id=?, title=?, description=?, xp_reward=?, time_limit=?, color=? WHERE id=?',
-    [lessonId ?? null, title, description, xpReward, timeLimit, color, id]
+    'UPDATE quizzes SET module_id=?, title=?, description=?, xp_reward=?, time_limit=?, color=? WHERE id=?',
+    [moduleId, title, description, xpReward, timeLimit, color, id]
   )
   const [rows] = await pool.execute<RowDataPacket[]>('SELECT * FROM quizzes WHERE id = ?', [id])
   return NextResponse.json(rows[0])

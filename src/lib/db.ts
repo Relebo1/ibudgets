@@ -170,6 +170,7 @@ export async function initDB() {
         options       JSON NOT NULL,
         correct_index INT  NOT NULL,
         explanation   TEXT,
+        order_index   INT  DEFAULT 0,
         FOREIGN KEY (quiz_id) REFERENCES quizzes(id) ON DELETE CASCADE
       )
     `)
@@ -284,6 +285,7 @@ export async function migrateDB(existingConn?: any) {
       `ALTER TABLE debts ADD COLUMN color VARCHAR(20) DEFAULT '#ef4444'`,
       `ALTER TABLE modules ADD COLUMN youtube_url VARCHAR(500) DEFAULT ''`,
       `ALTER TABLE quizzes ADD COLUMN lesson_id INT NULL`,
+      `ALTER TABLE quiz_questions ADD COLUMN order_index INT DEFAULT 0`,
     ]
     for (const sql of alterations) {
       await conn.execute(sql).catch(() => {})

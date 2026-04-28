@@ -3,13 +3,15 @@ import { useEffect, useState } from 'react'
 import { Plus, X, Trash2, Pencil, Brain, ChevronDown, ChevronUp } from 'lucide-react'
 
 const COLORS = ['#22c55e', '#3b82f6', '#f97316', '#a855f7', '#ec4899', '#14b8a6', '#f59e0b', '#ef4444']
-const emptyQuiz = { moduleId: '', title: '', description: '', xpReward: '100', timeLimit: '10', color: '#22c55e' }
+const emptyQuiz = { moduleId: '', lessonId: '', title: '', description: '', xpReward: '100', timeLimit: '10', color: '#22c55e' }
 const emptyQ = { question: '', options: ['', '', '', ''], correctIndex: 0, explanation: '' }
 const MIN_OPTIONS = 2
 const MAX_OPTIONS = 6
 
 export default function AdminQuizzesPage() {
   const [modules, setModules] = useState<any[]>([])
+  const [lessons, setLessons] = useState<any[]>([])
+  const [allLessons, setAllLessons] = useState<any[]>([])
   const [quizzes, setQuizzes] = useState<any[]>([])
   const [expanded, setExpanded] = useState<number | null>(null)
   const [showQuizModal, setShowQuizModal] = useState(false)
@@ -24,29 +26,41 @@ export default function AdminQuizzesPage() {
 
   useEffect(() => {
     fetch('/api/admin/modules').then(r => r.json()).then(setModules)
+    fetch('/api/admin/lessons').then(r => r.json()).then(setAllLessons)
     fetch('/api/admin/quizzes').then(r => r.json()).then(setQuizzes)
   }, [])
 
-  const openAddQuiz = () => { setEditingQuiz(null); setQuizForm(emptyQuiz); setShowQuizModal(true) }
+  const loadLessons = (moduleId: string) => {
+    if (!moduleId) { setLessons([]); return }
+    fetch(`/api/admin/lessons?moduleId=${moduleId}`).then(r => r.json()).then(setLessons)
+  }
+
+  const openAddQuiz = () => { setEditingQuiz(null); setQuizForm(emptyQuiz); setLessons([]); setShowQuizModal(true) }
   const openEditQuiz = (q: any) => {
     setEditingQuiz(q)
-    setQuizForm({ moduleId: String(q.module_id), title: q.title, description: q.description ?? '', xpReward: String(q.xp_reward), timeLimit: String(q.time_limit), color: q.color })
+    setQuizForm({ moduleId: String(q.module_id), lessonId: q.lesson_id ? String(q.lesson_id) : '', title: q.title, description: q.description ?? '', xpReward: String(q.xp_reward), timeLimit: String(q.time_limit), color: q.color })
+    loadLessons(String(q.module_id))
     setShowQuizModal(true)
   }
 
   const handleSaveQuiz = async (e: React.FormEvent) => {
     e.preventDefault()
-    const body = { ...quizForm, moduleId: Number(quizForm.moduleId), xpReward: Number(quizForm.xpReward), timeLimit: Number(quizForm.timeLimit) }
+    const body = { ...quizForm, moduleId: Number(quizForm.moduleId), lessonId: quizForm.lessonId ? Number(quizForm.lessonId) : null, xpReward: Number(quizForm.xpReward), timeLimit: Number(quizForm.timeLimit) }
     if (editingQuiz) {
       const res = await fetch('/api/admin/quizzes', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: editingQuiz.id, ...body }) })
       const updated = await res.json()
       setQuizzes(prev => prev.map(q => q.id === editingQuiz.id ? { ...q, ...updated } : q))
+      setShowQuizModal(false)
     } else {
       const res = await fetch('/api/admin/quizzes', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
       const created = await res.json()
-      setQuizzes(prev => [...prev, created])
+      setQuizzes(prev => [...prev, { ...created, questions: [] }])
+      setShowQuizModal(false)
+      setExpanded(created.id)
+      setEditingQ(null)
+      setQForm(emptyQ)
+      setShowQModal(created.id) // immediately open question builder
     }
-    setShowQuizModal(false)
   }
 
   const handleDeleteQuiz = async (id: number) => {
@@ -127,7 +141,9 @@ export default function AdminQuizzesPage() {
                 <div className="flex-1 min-w-0">
                   <p className="font-semibold text-gray-900 dark:text-gray-100">{quiz.title}</p>
                   <p className="text-xs text-gray-400">
-                    {modules.find(m => m.id === quiz.module_id)?.title ?? 'No module'} · {quiz.questions?.length ?? 0} questions · +{quiz.xp_reward} XP · {quiz.time_limit} min
+                    {modules.find(m => m.id === quiz.module_id)?.title ?? 'No module'}
+                    {quiz.lesson_id ? ` · ${allLessons.find(l => l.id === quiz.lesson_id)?.title ?? 'Lesson #' + quiz.lesson_id}` : ''}
+                    {' '}· {quiz.questions?.length ?? 0} questions · +{quiz.xp_reward} XP · {quiz.time_limit} min
                   </p>
                 </div>
                 <div className="flex items-center gap-2 flex-shrink-0">
@@ -200,10 +216,25 @@ export default function AdminQuizzesPage() {
             <form onSubmit={handleSaveQuiz} className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Module</label>
-                <select className="input" value={quizForm.moduleId} onChange={e => setQuizForm(f => ({ ...f, moduleId: e.target.value }))} required>
+                <select className="input" value={quizForm.moduleId} onChange={e => {
+                  setQuizForm(f => ({ ...f, moduleId: e.target.value, lessonId: '' }))
+                  loadLessons(e.target.value)
+                }} required>
                   <option value="">Select module...</option>
                   {modules.map(m => <option key={m.id} value={m.id}>{m.title}</option>)}
                 </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+                  Lesson <span className="text-xs text-gray-400 font-normal">(optional — links quiz to a lesson)</span>
+                </label>
+                <select className="input" value={quizForm.lessonId} onChange={e => setQuizForm(f => ({ ...f, lessonId: e.target.value }))} disabled={!quizForm.moduleId}>
+                  <option value="">No lesson (module-level quiz)</option>
+                  {lessons.map(l => <option key={l.id} value={l.id}>{l.title}</option>)}
+                </select>
+                {quizForm.moduleId && lessons.length === 0 && (
+                  <p className="text-xs text-gray-400 mt-1">No lessons in this module yet — create lessons first to link a quiz.</p>
+                )}
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Quiz Title</label>
@@ -246,48 +277,72 @@ export default function AdminQuizzesPage() {
       {showQModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
           <div className="card w-full max-w-lg p-6 shadow-2xl max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between mb-5">
-              <h3 className="font-semibold text-gray-900 dark:text-gray-100">{editingQ ? 'Edit Question' : 'New Question'}</h3>
+            <div className="flex items-center justify-between mb-1">
+              <h3 className="font-semibold text-gray-900 dark:text-gray-100">{editingQ ? 'Edit Question' : 'Add Question'}</h3>
               <button onClick={() => setShowQModal(null)} className="w-8 h-8 bg-gray-100 dark:bg-gray-800 rounded-lg flex items-center justify-center text-gray-500"><X className="w-4 h-4" /></button>
             </div>
+            <p className="text-xs text-gray-400 mb-5">{quizzes.find(q => q.id === showQModal)?.title} · {quizzes.find(q => q.id === showQModal)?.questions?.length ?? 0} questions so far</p>
             <form onSubmit={handleSaveQ} className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Question</label>
-                <textarea className="input resize-none" rows={2} placeholder="Enter the question..." value={qForm.question} onChange={e => setQForm(f => ({ ...f, question: e.target.value }))} required />
+                <textarea className="input resize-none" rows={3} placeholder="e.g. What is the 50/30/20 budgeting rule?" value={qForm.question} onChange={e => setQForm(f => ({ ...f, question: e.target.value }))} required />
               </div>
+
               <div>
-                <div className="flex items-center justify-between mb-1.5">
-                  <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                    Answer Options <span className="text-xs text-gray-400 font-normal">(click letter to mark correct)</span>
-                  </label>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Answer Options</label>
                   {qForm.options.length < MAX_OPTIONS && (
-                    <button type="button" onClick={addOption} className="text-xs text-brand-600 dark:text-brand-400 flex items-center gap-1 hover:underline">
+                    <button type="button" onClick={addOption} className="text-xs text-brand-600 dark:text-brand-400 bg-brand-50 dark:bg-brand-900/30 hover:bg-brand-100 px-2.5 py-1 rounded-lg flex items-center gap-1 transition-colors">
                       <Plus className="w-3 h-3" /> Add option
                     </button>
                   )}
                 </div>
+
                 <div className="space-y-2">
-                  {qForm.options.map((opt, i) => (
-                    <div key={i} className="flex items-center gap-2">
-                      <button type="button" onClick={() => setQForm(f => ({ ...f, correctIndex: i }))}
-                        className={`w-8 h-8 rounded-full border-2 flex-shrink-0 flex items-center justify-center text-xs font-bold transition-all ${qForm.correctIndex === i ? 'border-brand-500 bg-brand-500 text-white' : 'border-gray-300 dark:border-gray-600 text-gray-400 hover:border-brand-400'}`}>
-                        {String.fromCharCode(65 + i)}
-                      </button>
-                      <input className="input" placeholder={`Option ${String.fromCharCode(65 + i)}`} value={opt} onChange={e => setOption(i, e.target.value)} required />
-                      {qForm.options.length > MIN_OPTIONS && (
-                        <button type="button" onClick={() => removeOption(i)} className="w-7 h-7 flex-shrink-0 flex items-center justify-center text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30 rounded-lg transition-all">
-                          <X className="w-3.5 h-3.5" />
+                  {qForm.options.map((opt, i) => {
+                    const isCorrect = qForm.correctIndex === i
+                    return (
+                      <div key={i} className={`flex items-center gap-2 p-2 rounded-xl border-2 transition-all ${isCorrect ? 'border-green-400 bg-green-50 dark:bg-green-900/20' : 'border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50'}`}>
+                        <button
+                          type="button"
+                          onClick={() => setQForm(f => ({ ...f, correctIndex: i }))}
+                          title={isCorrect ? 'Correct answer' : 'Mark as correct'}
+                          className={`w-8 h-8 rounded-full border-2 flex-shrink-0 flex items-center justify-center text-xs font-bold transition-all ${
+                            isCorrect
+                              ? 'border-green-500 bg-green-500 text-white'
+                              : 'border-gray-300 dark:border-gray-600 text-gray-400 hover:border-green-400 hover:text-green-500'
+                          }`}>
+                          {String.fromCharCode(65 + i)}
                         </button>
-                      )}
-                    </div>
-                  ))}
+                        <input
+                          className="flex-1 bg-transparent border-none outline-none text-sm text-gray-900 dark:text-gray-100 placeholder-gray-400"
+                          placeholder={`Option ${String.fromCharCode(65 + i)}...`}
+                          value={opt}
+                          onChange={e => setOption(i, e.target.value)}
+                          required
+                        />
+                        {isCorrect && (
+                          <span className="text-xs font-semibold text-green-600 dark:text-green-400 flex-shrink-0">✓ Correct</span>
+                        )}
+                        {!isCorrect && qForm.options.length > MIN_OPTIONS && (
+                          <button type="button" onClick={() => removeOption(i)} className="w-6 h-6 flex-shrink-0 flex items-center justify-center text-gray-300 hover:text-red-500 transition-colors">
+                            <X className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                      </div>
+                    )
+                  })}
                 </div>
-                <p className="text-xs text-gray-400 mt-1.5">{qForm.options.length}/{MAX_OPTIONS} options · {String.fromCharCode(65 + qForm.correctIndex)} is correct</p>
+                <p className="text-xs text-gray-400 mt-2">{qForm.options.length}/{MAX_OPTIONS} options · click a letter to mark it as the correct answer</p>
               </div>
+
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Explanation <span className="text-xs text-gray-400 font-normal">(why is this the correct answer?)</span></label>
-                <textarea className="input resize-none" rows={2} placeholder="Explain why the correct answer is right..." value={qForm.explanation} onChange={e => setQForm(f => ({ ...f, explanation: e.target.value }))} />
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+                  Explanation <span className="text-xs text-gray-400 font-normal">— why is this the correct answer?</span>
+                </label>
+                <textarea className="input resize-none" rows={2} placeholder="e.g. The 50/30/20 rule allocates 50% to needs, 30% to wants, and 20% to savings." value={qForm.explanation} onChange={e => setQForm(f => ({ ...f, explanation: e.target.value }))} />
               </div>
+
               <div className="flex gap-3 pt-2">
                 <button type="button" onClick={() => setShowQModal(null)} className="btn-secondary flex-1">Done</button>
                 {!editingQ && (

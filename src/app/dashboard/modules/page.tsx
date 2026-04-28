@@ -27,6 +27,7 @@ export default function ModulesPage() {
   const [currentQ, setCurrentQ] = useState(0)
   const [picked, setPicked] = useState<number | null>(null)
   const [answered, setAnswered] = useState(false)
+  const [answers, setAnswers] = useState<number[]>([])
   const [score, setScore] = useState(0)
   const [finished, setFinished] = useState(false)
 
@@ -64,20 +65,21 @@ export default function ModulesPage() {
 
   const startQuiz = (q: any) => {
     setActiveQuiz(q); setCurrentQ(0); setPicked(null)
-    setAnswered(false); setScore(0); setFinished(false)
+    setAnswered(false); setAnswers([]); setScore(0); setFinished(false)
   }
 
   const handleAnswer = (idx: number) => {
     if (answered) return
     setPicked(idx)
     setAnswered(true)
-    if (idx === activeQuiz.questions[currentQ].correct_index) setScore(s => s + 1)
   }
 
   const handleNext = async () => {
+    if (picked === null) return
+    const updatedAnswers = [...answers, picked]
     const isLast = currentQ + 1 >= activeQuiz.questions.length
     if (isLast) {
-      const correct = score + (picked === activeQuiz.questions[currentQ].correct_index ? 1 : 0)
+      const correct = updatedAnswers.filter((a, i) => a === activeQuiz.questions[i].correct_index).length
       const finalScore = Math.round(correct / activeQuiz.questions.length * 100)
       await fetch('/api/quizzes', {
         method: 'PUT',
@@ -85,8 +87,11 @@ export default function ModulesPage() {
         body: JSON.stringify({ userId: user.id, quizId: activeQuiz.id, score: finalScore, completed: true }),
       })
       setQuizzes(prev => prev.map(q => q.id === activeQuiz.id ? { ...q, completed: 1, score: finalScore } : q))
+      setAnswers(updatedAnswers)
+      setScore(correct)
       setFinished(true)
     } else {
+      setAnswers(updatedAnswers)
       setCurrentQ(c => c + 1); setPicked(null); setAnswered(false)
     }
   }
@@ -118,36 +123,38 @@ export default function ModulesPage() {
           <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-6">{q.question}</h3>
           <div className="space-y-3 mb-6">
             {q.options.map((opt: string, i: number) => {
-              let style = 'border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 hover:border-brand-300 hover:bg-brand-50'
+              let style = 'border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 hover:border-brand-300 hover:bg-brand-50 cursor-pointer'
               let Icon = null
               if (answered) {
-                if (i === q.correct_index) { style = 'border-brand-500 bg-brand-50 dark:bg-brand-900/30'; Icon = CheckCircle }
-                else if (i === picked) { style = 'border-red-400 bg-red-50 dark:bg-red-950/30'; Icon = XCircle }
-                else style = 'border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-900 opacity-50'
+                if (i === q.correct_index) { style = 'border-green-500 bg-green-50 dark:bg-green-900/30 cursor-default'; Icon = CheckCircle }
+                else if (i === picked) { style = 'border-red-400 bg-red-50 dark:bg-red-950/30 cursor-default'; Icon = XCircle }
+                else style = 'border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-900 opacity-40 cursor-default'
               }
               return (
-                <button key={i} onClick={() => handleAnswer(i)}
+                <button key={i} onClick={() => handleAnswer(i)} disabled={answered}
                   className={`w-full text-left px-5 py-4 rounded-xl border-2 transition-all duration-150 text-sm font-medium flex items-center justify-between ${style}`}>
-                  <span><span className="mr-3 text-gray-400">{String.fromCharCode(65 + i)}.</span>{opt}</span>
-                  {Icon && <Icon className={`w-4 h-4 flex-shrink-0 ${i === q.correct_index ? 'text-brand-600' : 'text-red-500'}`} />}
+                  <span><span className="mr-3 text-gray-400 font-bold">{String.fromCharCode(65 + i)}.</span>{opt}</span>
+                  {Icon && <Icon className={`w-5 h-5 flex-shrink-0 ${i === q.correct_index ? 'text-green-600' : 'text-red-500'}`} />}
                 </button>
               )
             })}
           </div>
           {answered && (
-            <div className={`p-4 rounded-xl mb-4 flex items-start gap-3 ${picked === q.correct_index ? 'bg-brand-50 dark:bg-brand-900/30 border border-brand-200 dark:border-brand-800' : 'bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800'}`}>
+            <div className={`p-4 rounded-xl mb-4 flex items-start gap-3 ${picked === q.correct_index ? 'bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800' : 'bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800'}`}>
               {picked === q.correct_index
-                ? <CheckCircle className="w-5 h-5 text-brand-600 flex-shrink-0 mt-0.5" />
+                ? <CheckCircle className="w-5 h-5 text-green-600 flex-shrink-0 mt-0.5" />
                 : <XCircle className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />}
               <div>
-                <p className="text-sm font-medium dark:text-gray-100 mb-0.5">{picked === q.correct_index ? 'Correct!' : 'Incorrect'}</p>
-                <p className="text-sm text-gray-600 dark:text-gray-400">{q.explanation}</p>
+                <p className="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-0.5">
+                  {picked === q.correct_index ? 'Correct!' : `Incorrect — correct answer: ${String.fromCharCode(65 + q.correct_index)}. ${q.options[q.correct_index]}`}
+                </p>
+                {q.explanation && <p className="text-sm text-gray-600 dark:text-gray-400">{q.explanation}</p>}
               </div>
             </div>
           )}
           {answered && (
             <button onClick={handleNext} className="btn-primary w-full flex items-center justify-center gap-2">
-              {currentQ + 1 >= activeQuiz.questions.length ? 'Finish Quiz' : <>Next Question <ChevronRight className="w-4 h-4" /></>}
+              {currentQ + 1 >= activeQuiz.questions.length ? 'See Results' : <>Next Question <ChevronRight className="w-4 h-4" /></>}
             </button>
           )}
         </div>
@@ -155,34 +162,73 @@ export default function ModulesPage() {
     )
   }
 
-  // ── Quiz finished ─────────────────────────────────────────────────────────
+  // ── Quiz results ──────────────────────────────────────────────────────────
   if (finished && activeQuiz) {
     const finalScore = Math.round(score / activeQuiz.questions.length * 100)
+    const passed = finalScore >= 70
     return (
-      <div className="max-w-md mx-auto">
-        <div className="card p-5 sm:p-8 text-center">
-          <div className={`w-16 h-16 rounded-3xl flex items-center justify-center mx-auto mb-4 ${finalScore >= 70 ? 'bg-brand-50 dark:bg-brand-900/30' : 'bg-orange-50 dark:bg-orange-900/30'}`}>
-            <Trophy className={`w-8 h-8 ${finalScore >= 70 ? 'text-brand-600' : 'text-orange-500'}`} />
+      <div className="max-w-2xl mx-auto space-y-4">
+        <div className="card p-6 sm:p-8 text-center">
+          <div className={`w-16 h-16 rounded-3xl flex items-center justify-center mx-auto mb-4 ${passed ? 'bg-green-50 dark:bg-green-900/30' : 'bg-orange-50 dark:bg-orange-900/30'}`}>
+            <Trophy className={`w-8 h-8 ${passed ? 'text-green-600' : 'text-orange-500'}`} />
           </div>
           <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-1">Quiz Complete!</h2>
-          <p className="text-gray-500 dark:text-gray-400 mb-6">{activeQuiz.title}</p>
-          <div className="w-32 h-32 mx-auto mb-6 relative">
+          <p className="text-gray-500 dark:text-gray-400 mb-5">{activeQuiz.title}</p>
+          <div className="w-28 h-28 mx-auto mb-4 relative">
             <svg className="w-full h-full -rotate-90" viewBox="0 0 36 36">
               <circle cx="18" cy="18" r="15.9" fill="none" stroke="#e5e7eb" strokeWidth="3" />
-              <circle cx="18" cy="18" r="15.9" fill="none" stroke={finalScore >= 70 ? '#22c55e' : '#f97316'}
+              <circle cx="18" cy="18" r="15.9" fill="none" stroke={passed ? '#22c55e' : '#f97316'}
                 strokeWidth="3" strokeDasharray={`${finalScore} ${100 - finalScore}`} strokeLinecap="round" />
             </svg>
             <div className="absolute inset-0 flex items-center justify-center">
               <span className="text-2xl font-bold text-gray-900 dark:text-gray-100">{finalScore}%</span>
             </div>
           </div>
-          <p className="text-sm text-gray-500 dark:text-gray-400 mb-2">{score}/{activeQuiz.questions.length} correct answers</p>
-          <p className="text-brand-600 dark:text-brand-400 font-semibold mb-6 flex items-center justify-center gap-1.5">
+          <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">{score} of {activeQuiz.questions.length} correct</p>
+          <p className={`text-sm font-semibold mb-4 ${passed ? 'text-green-600' : 'text-orange-500'}`}>
+            {passed ? '🎉 Well done! You passed.' : '📚 Keep studying and try again.'}
+          </p>
+          <p className="text-brand-600 dark:text-brand-400 font-semibold mb-5 flex items-center justify-center gap-1.5">
             <Zap className="w-4 h-4" /> +{activeQuiz.xp_reward} XP earned!
           </p>
           <div className="flex gap-3">
             <button onClick={() => startQuiz(activeQuiz)} className="btn-secondary flex-1 flex items-center justify-center gap-1.5"><RotateCcw className="w-4 h-4" /> Retry</button>
             <button onClick={() => { setActiveQuiz(null); setFinished(false) }} className="btn-primary flex-1">Back to Module</button>
+          </div>
+        </div>
+
+        <div className="card p-5">
+          <h3 className="font-semibold text-gray-900 dark:text-gray-100 mb-4">Question Breakdown</h3>
+          <div className="space-y-3">
+            {activeQuiz.questions.map((q: any, i: number) => {
+              const userPick = answers[i]
+              const wasCorrect = userPick === q.correct_index
+              return (
+                <div key={q.id} className={`rounded-xl border-2 p-4 ${wasCorrect ? 'border-green-200 dark:border-green-800 bg-green-50/50 dark:bg-green-900/10' : 'border-red-200 dark:border-red-800 bg-red-50/50 dark:bg-red-950/10'}`}>
+                  <div className="flex items-start gap-3">
+                    <div className={`w-6 h-6 rounded-full flex-shrink-0 flex items-center justify-center mt-0.5 ${wasCorrect ? 'bg-green-500' : 'bg-red-500'}`}>
+                      {wasCorrect ? <CheckCircle className="w-4 h-4 text-white" /> : <XCircle className="w-4 h-4 text-white" />}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-gray-900 dark:text-gray-100 mb-1">
+                        <span className="text-gray-400 mr-1">Q{i + 1}.</span>{q.question}
+                      </p>
+                      {wasCorrect ? (
+                        <p className="text-xs text-green-700 dark:text-green-400 font-medium">
+                          ✓ Correct — {String.fromCharCode(65 + userPick)}. {q.options[userPick]}
+                        </p>
+                      ) : (
+                        <div className="space-y-0.5">
+                          <p className="text-xs text-red-600 dark:text-red-400">✗ Your answer: {String.fromCharCode(65 + userPick)}. {q.options[userPick]}</p>
+                          <p className="text-xs text-green-700 dark:text-green-400 font-medium">✓ Correct answer: {String.fromCharCode(65 + q.correct_index)}. {q.options[q.correct_index]}</p>
+                        </div>
+                      )}
+                      {q.explanation && <p className="text-xs text-gray-500 dark:text-gray-400 mt-1.5 italic">{q.explanation}</p>}
+                    </div>
+                  </div>
+                </div>
+              )
+            })}
           </div>
         </div>
       </div>

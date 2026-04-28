@@ -24,12 +24,22 @@ export async function GET(req: Request) {
   const quizzes = await Promise.all(
     quizRows.map(async (quiz) => {
       const [qRows] = await pool.execute<RowDataPacket[]>(
-        'SELECT * FROM quiz_questions WHERE quiz_id = ? ORDER BY id',
+        'SELECT * FROM quiz_questions WHERE quiz_id = ? ORDER BY order_index ASC, id ASC',
         [quiz.id]
       )
       return {
         ...quiz,
-        questions: qRows.map(q => ({ ...q, options: JSON.parse(q.options as string) })),
+        questions: qRows.map(q => {
+          let options = q.options
+          if (typeof options === 'string') {
+            try {
+              options = JSON.parse(options)
+            } catch {
+              options = []
+            }
+          }
+          return { ...q, options: Array.isArray(options) ? options : [] }
+        }),
       }
     })
   )

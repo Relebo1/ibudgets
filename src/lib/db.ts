@@ -4,9 +4,9 @@ const isProduction = !!process.env.DB_HOST && process.env.DB_HOST !== 'localhost
 
 const pool = mysql.createPool({
   host: process.env.DB_HOST ?? 'localhost',
-  user: process.env.DB_USER ?? 'root',
+  user: process.env.DB_USERNAME ?? process.env.DB_USER ?? 'root',
   password: process.env.DB_PASSWORD ?? 'password1',
-  database: process.env.DB_NAME ?? 'ibudget',
+  database: process.env.DB_DATABASE ?? process.env.DB_NAME ?? 'ibudget',
   port: Number(process.env.DB_PORT ?? 4000),
   waitForConnections: true,
   connectionLimit: 10,
@@ -118,17 +118,46 @@ export async function initDB() {
       )
     `)
 
+    // Lessons (structured content units per module)
+    await conn.execute(`
+      CREATE TABLE IF NOT EXISTS lessons (
+        id            INT AUTO_INCREMENT PRIMARY KEY,
+        module_id     INT          NOT NULL,
+        title         VARCHAR(150) NOT NULL,
+        description   TEXT,
+        youtube_url   VARCHAR(500) DEFAULT '',
+        video_duration VARCHAR(20) DEFAULT '',
+        order_index   INT          DEFAULT 0,
+        FOREIGN KEY (module_id) REFERENCES modules(id) ON DELETE CASCADE
+      )
+    `)
+
+    // User lesson completion
+    await conn.execute(`
+      CREATE TABLE IF NOT EXISTS user_lessons (
+        id         INT AUTO_INCREMENT PRIMARY KEY,
+        user_id    INT NOT NULL,
+        lesson_id  INT NOT NULL,
+        completed  TINYINT(1) DEFAULT 0,
+        UNIQUE KEY uq_user_lesson (user_id, lesson_id),
+        FOREIGN KEY (user_id)  REFERENCES users(id)   ON DELETE CASCADE,
+        FOREIGN KEY (lesson_id) REFERENCES lessons(id) ON DELETE CASCADE
+      )
+    `)
+
     // Quizzes (global)
     await conn.execute(`
       CREATE TABLE IF NOT EXISTS quizzes (
         id          INT AUTO_INCREMENT PRIMARY KEY,
         module_id   INT          NOT NULL,
+        lesson_id   INT          NULL,
         title       VARCHAR(150) NOT NULL,
         description TEXT,
         xp_reward   INT          DEFAULT 100,
         time_limit  INT          DEFAULT 10,
         color       VARCHAR(20)  DEFAULT '#22c55e',
-        FOREIGN KEY (module_id) REFERENCES modules(id) ON DELETE CASCADE
+        FOREIGN KEY (module_id) REFERENCES modules(id) ON DELETE CASCADE,
+        FOREIGN KEY (lesson_id) REFERENCES lessons(id) ON DELETE SET NULL
       )
     `)
 
@@ -211,17 +240,56 @@ export async function initDB() {
       )
     `)
 
-    // Migrate existing tables — add new columns if missing
-    const migrations = [
+    await migrateDB(conn)
+  } finally {
+    conn.release()
+  }
+}
+
+// Safe additive migrations — run on both local and TiDB Cloud
+export async function migrateDB(existingConn?: any) {
+  const conn = existingConn ?? await pool.getConnection()
+  const release = !existingConn
+  try {
+    // New table creation (safe — IF NOT EXISTS never touches existing tables)
+    await conn.execute(`
+      CREATE TABLE IF NOT EXISTS lessons (
+        id             INT AUTO_INCREMENT PRIMARY KEY,
+        module_id      INT          NOT NULL,
+        title          VARCHAR(150) NOT NULL,
+        description    TEXT,
+        youtube_url    VARCHAR(500) DEFAULT '',
+        video_duration VARCHAR(20)  DEFAULT '',
+        order_index    INT          DEFAULT 0,
+        FOREIGN KEY (module_id) REFERENCES modules(id) ON DELETE CASCADE
+      )
+    `).catch(() => {})
+
+    await conn.execute(`
+      CREATE TABLE IF NOT EXISTS user_lessons (
+        id         INT AUTO_INCREMENT PRIMARY KEY,
+        user_id    INT NOT NULL,
+        lesson_id  INT NOT NULL,
+        completed  TINYINT(1) DEFAULT 0,
+        UNIQUE KEY uq_user_lesson (user_id, lesson_id),
+        FOREIGN KEY (user_id)   REFERENCES users(id)   ON DELETE CASCADE,
+        FOREIGN KEY (lesson_id) REFERENCES lessons(id) ON DELETE CASCADE
+      )
+    `).catch(() => {})
+
+    // Column additions (silently skipped if already present)
+    const alterations = [
       `ALTER TABLE users ADD COLUMN last_login TIMESTAMP NULL DEFAULT NULL`,
       `ALTER TABLE users ADD COLUMN is_admin TINYINT(1) DEFAULT 0`,
       `ALTER TABLE debts ADD COLUMN color VARCHAR(20) DEFAULT '#ef4444'`,
       `ALTER TABLE modules ADD COLUMN youtube_url VARCHAR(500) DEFAULT ''`,
+      `ALTER TABLE quizzes ADD COLUMN lesson_id INT NULL`,
     ]
-    for (const sql of migrations) {
-      await conn.execute(sql).catch(() => {}) // silently skip if column already exists
+    for (const sql of alterations) {
+      await conn.execute(sql).catch(() => {})
     }
+    console.log('[iBudget] ✅ Migrations applied')
   } finally {
-    conn.release()
+    if (release) conn.release()
   }
 }

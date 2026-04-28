@@ -142,7 +142,9 @@ export default function QuizzesPage() {
             <svg className="w-full h-full -rotate-90" viewBox="0 0 36 36">
               <circle cx="18" cy="18" r="15.9" fill="none" stroke="#e5e7eb" strokeWidth="3" />
               <circle cx="18" cy="18" r="15.9" fill="none" stroke={passed ? '#22c55e' : '#f97316'}
-                strokeWidth="3" strokeDasharray={`${finalScore} ${100 - finalScore}`} strokeLinecap="round" />
+                strokeWidth="3"
+                strokeDasharray={`${(finalScore / 100) * 99.9} ${99.9 - (finalScore / 100) * 99.9}`}
+                strokeLinecap="round" />
             </svg>
             <div className="absolute inset-0 flex items-center justify-center">
               <span className="text-2xl font-bold text-gray-900 dark:text-gray-100">{finalScore}%</span>

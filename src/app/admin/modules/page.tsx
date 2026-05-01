@@ -4,8 +4,10 @@ import { Plus, X, Trash2, Pencil, BookOpen } from 'lucide-react'
 
 const DIFFICULTIES = ['Beginner', 'Intermediate', 'Advanced']
 const COLORS = ['#22c55e', '#3b82f6', '#f97316', '#a855f7', '#ec4899', '#14b8a6', '#f59e0b', '#ef4444']
+const CATEGORIES = ['Budgeting', 'Saving', 'Investing', 'Debt Management', 'Financial Planning', 'Banking', 'Credit', 'Taxes']
+const DURATIONS = ['15 min', '30 min', '45 min', '1 hour', '1.5 hours', '2 hours']
 
-const empty = { title: '', description: '', youtube_url: '', category: '', duration: '30 min', difficulty: 'Beginner', xpReward: '100', lessons: '5', color: '#22c55e' }
+const empty = { title: '', description: '', youtube_url: '', category: 'Budgeting', duration: '30 min', difficulty: 'Beginner', xpReward: '100', lessons: '5', color: '#22c55e' }
 
 export default function AdminModulesPage() {
   const [modules, setModules] = useState<any[]>([])
@@ -28,6 +30,11 @@ export default function AdminModulesPage() {
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (!form.title.trim()) { alert('Title is required'); return }
+    if (!form.category) { alert('Category is required'); return }
+    if (Number(form.xpReward) < 10) { alert('XP Reward must be at least 10'); return }
+    if (Number(form.lessons) < 1) { alert('Lessons must be at least 1'); return }
+    
     const body = { ...form, xpReward: Number(form.xpReward), lessons: Number(form.lessons) }
     if (editing) {
       const res = await fetch('/api/admin/modules', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: editing.id, ...body }) })
@@ -134,25 +141,32 @@ export default function AdminModulesPage() {
             </div>
             <form onSubmit={handleSave} className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Title</label>
-                <input className="input" placeholder="e.g. Budgeting Basics" value={form.title} onChange={e => set('title', e.target.value)} required />
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Title <span className="text-red-500">*</span></label>
+                <input className="input" placeholder="e.g. Budgeting Basics" value={form.title} onChange={e => set('title', e.target.value)} maxLength={150} required />
+                <p className="text-xs text-gray-400 mt-1">{form.title.length}/150</p>
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Description</label>
-                <textarea className="input resize-none" rows={2} placeholder="Brief description..." value={form.description} onChange={e => set('description', e.target.value)} />
+                <textarea className="input resize-none" rows={2} placeholder="Brief overview of what students will learn" value={form.description} onChange={e => set('description', e.target.value)} maxLength={500} />
+                <p className="text-xs text-gray-400 mt-1">{form.description.length}/500</p>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">YouTube URL</label>
-                <input className="input" placeholder="https://www.youtube.com/watch?v=..." value={form.youtube_url} onChange={e => set('youtube_url', e.target.value)} />
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">YouTube URL (Optional)</label>
+                <input className="input" placeholder="https://www.youtube.com/watch?v=dQw4w9WgXcQ" value={form.youtube_url} onChange={e => set('youtube_url', e.target.value)} />
+                <p className="text-xs text-gray-400 mt-1">Paste full URL or video ID</p>
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Category</label>
-                  <input className="input" placeholder="e.g. Budgeting" value={form.category} onChange={e => set('category', e.target.value)} required />
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Category <span className="text-red-500">*</span></label>
+                  <select className="input" value={form.category} onChange={e => set('category', e.target.value)} required>
+                    {CATEGORIES.map(c => <option key={c}>{c}</option>)}
+                  </select>
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Duration</label>
-                  <input className="input" placeholder="e.g. 30 min" value={form.duration} onChange={e => set('duration', e.target.value)} />
+                  <select className="input" value={form.duration} onChange={e => set('duration', e.target.value)}>
+                    {DURATIONS.map(d => <option key={d}>{d}</option>)}
+                  </select>
                 </div>
               </div>
               <div className="grid grid-cols-3 gap-4">
@@ -163,12 +177,14 @@ export default function AdminModulesPage() {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">XP Reward</label>
-                  <input className="input" type="number" placeholder="100" value={form.xpReward} onChange={e => set('xpReward', e.target.value)} min="1" />
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">XP Reward <span className="text-red-500">*</span></label>
+                  <input className="input" type="number" value={form.xpReward} onChange={e => set('xpReward', e.target.value)} min="10" max="1000" />
+                  <p className="text-xs text-gray-400 mt-1">10-1000</p>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Lessons</label>
-                  <input className="input" type="number" placeholder="5" value={form.lessons} onChange={e => set('lessons', e.target.value)} min="1" />
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Lessons <span className="text-red-500">*</span></label>
+                  <input className="input" type="number" value={form.lessons} onChange={e => set('lessons', e.target.value)} min="1" max="20" />
+                  <p className="text-xs text-gray-400 mt-1">1-20</p>
                 </div>
               </div>
               <div>

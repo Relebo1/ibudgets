@@ -283,10 +283,11 @@ export async function migrateDB(existingConn?: any) {
       `ALTER TABLE users ADD COLUMN last_login TIMESTAMP NULL DEFAULT NULL`,
       `ALTER TABLE users ADD COLUMN is_admin TINYINT(1) DEFAULT 0`,
       `ALTER TABLE debts ADD COLUMN color VARCHAR(20) DEFAULT '#ef4444'`,
-      `ALTER TABLE modules ADD COLUMN youtube_url VARCHAR(500) DEFAULT ''`,
-      `ALTER TABLE quizzes ADD COLUMN lesson_id INT NULL`,
-      `ALTER TABLE quiz_questions ADD COLUMN order_index INT DEFAULT 0`,
       `ALTER TABLE lessons ADD COLUMN content LONGTEXT DEFAULT ''`,
+      `ALTER TABLE lessons ADD COLUMN duration_minutes INT DEFAULT 0`,
+      `ALTER TABLE modules ADD COLUMN created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP`,
+      `ALTER TABLE quizzes ADD COLUMN created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP`,
+      `ALTER TABLE quiz_questions ADD COLUMN order_index INT DEFAULT 0`,
     ]
     for (const sql of alterations) {
       await conn.execute(sql).catch(() => {})

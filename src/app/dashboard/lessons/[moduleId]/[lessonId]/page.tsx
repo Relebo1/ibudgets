@@ -5,7 +5,7 @@ import { useSession } from '@/lib/SessionProvider'
 import Link from 'next/link'
 
 function getYouTubeId(url: string) {
-  const m = url.match(/(?:v=|youtu\\.be\\/)([^&?/]+)/)
+  const m = url.match(/(?:v=|youtu\.be\/)([^&?/]+)/)
   return m ? m[1] : null
 }
 

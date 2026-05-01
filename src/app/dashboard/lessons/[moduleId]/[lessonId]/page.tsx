@@ -2,9 +2,10 @@
 import { useEffect, useState } from 'react'
 import { Clock, BookOpen, Zap, CheckCircle, ChevronRight, Lock, X, Play, HelpCircle, RotateCcw, Trophy, XCircle, Youtube, ArrowLeft } from 'lucide-react'
 import { useSession } from '@/lib/SessionProvider'
+import Link from 'next/link'
 
 function getYouTubeId(url: string) {
-  const m = url.match(/(?:v=|youtu\.be\/)([^&?/]+)/)
+  const m = url.match(/(?:v=|youtu\\.be\\/)([^&?/]+)/)
   return m ? m[1] : null
 }
 
@@ -286,10 +287,14 @@ export default function LessonPage({ params }: { params: { moduleId: string; les
       {/* Lesson content */}
       <div className="card p-6">
         <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">Lesson Content</h2>
-        <div className="prose prose-sm dark:prose-invert max-w-none">
-          <div className="text-gray-700 dark:text-gray-300 whitespace-pre-wrap leading-relaxed">
-            {lesson.content}
-          </div>
+        <div className="prose prose-sm dark:prose-invert max-w-none text-gray-700 dark:text-gray-300 leading-relaxed">
+          {lesson.content.split('\n').map((paragraph: string, idx: number) => (
+            paragraph.trim() && (
+              <p key={idx} className="mb-4 last:mb-0">
+                {paragraph}
+              </p>
+            )
+          ))}
         </div>
       </div>
 
@@ -319,19 +324,30 @@ export default function LessonPage({ params }: { params: { moduleId: string; les
       )}
 
       {/* Quiz section */}
-      {lessonCompleted && quizzes.length > 0 && (
+      {quizzes.length > 0 && (
         <div className="card p-6">
           <div className="flex items-center gap-2 mb-4">
             <HelpCircle className="w-5 h-5 text-purple-500" />
             <h2 className="font-semibold text-gray-900 dark:text-gray-100">Lesson Quiz</h2>
+            {!lessonCompleted && (
+              <span className="ml-auto flex items-center gap-1.5 text-xs text-amber-600 bg-amber-50 dark:bg-amber-900/30 dark:text-amber-400 px-2.5 py-1 rounded-lg font-medium">
+                <Lock className="w-3 h-3" /> Complete lesson to unlock
+              </span>
+            )}
           </div>
 
           <div className="space-y-3">
             {quizzes.map((q: any) => (
-              <div key={q.id} className="rounded-xl border-2 border-gray-200 dark:border-gray-700 p-4">
+              <div key={q.id} className={`rounded-xl border-2 p-4 transition-all ${
+                lessonCompleted
+                  ? 'border-gray-200 dark:border-gray-700'
+                  : 'border-gray-100 dark:border-gray-800 opacity-60'
+              }`}>
                 <div className="flex items-center gap-3 mb-3">
                   <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: q.color + '20' }}>
-                    <div className="w-4 h-4 rounded-full" style={{ background: q.color }} />
+                    {lessonCompleted
+                      ? <div className="w-4 h-4 rounded-full" style={{ background: q.color }} />
+                      : <Lock className="w-4 h-4 text-gray-400" />}
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="font-semibold text-gray-900 dark:text-gray-100 text-sm">{q.title}</p>
@@ -347,23 +363,49 @@ export default function LessonPage({ params }: { params: { moduleId: string; les
                     </span>
                   )}
                 </div>
-                <button onClick={() => startQuiz(q)}
-                  className={`w-full py-2.5 rounded-xl text-sm font-medium transition-all active:scale-95 flex items-center justify-center gap-1.5 ${q.completed == 1 ? 'bg-gray-100 dark:bg-gray-800 text-gray-600 hover:bg-gray-200' : 'bg-gray-900 hover:bg-gray-800 text-white'}`}>
-                  {q.completed == 1 ? <><RotateCcw className="w-4 h-4" /> Retake Quiz</> : <>Start Quiz <ChevronRight className="w-4 h-4" /></>}
-                </button>
+                {lessonCompleted && (
+                  <button onClick={() => startQuiz(q)}
+                    className={`w-full py-2.5 rounded-xl text-sm font-medium transition-all active:scale-95 flex items-center justify-center gap-1.5 ${q.completed == 1 ? 'bg-gray-100 dark:bg-gray-800 text-gray-600 hover:bg-gray-200' : 'bg-gray-900 hover:bg-gray-800 text-white'}`}>
+                    {q.completed == 1 ? <><RotateCcw className="w-4 h-4" /> Retake Quiz</> : <>Start Quiz <ChevronRight className="w-4 h-4" /></>}
+                  </button>
+                )}
               </div>
             ))}
           </div>
         </div>
       )}
 
-      {lessonCompleted && quizzes.length === 0 && (
+      {quizzes.length === 0 && (
         <div className="card p-6 text-center text-gray-400">
           <HelpCircle className="w-10 h-10 mx-auto mb-3 opacity-30" />
           <p className="font-medium mb-1">No quiz for this lesson</p>
           <p className="text-sm">Check back later for quiz content</p>
         </div>
       )}
+
+      {/* Lesson navigation */}
+      <div className="flex items-center justify-between gap-3">
+        {lessonIndex > 0 ? (
+          <Link
+            href={`/dashboard/lessons/${params.moduleId}/${lessons[lessonIndex - 1].id}`}
+            className="btn-secondary flex items-center gap-1.5"
+          >
+            ← Previous Lesson
+          </Link>
+        ) : (
+          <div />
+        )}
+        {lessonIndex < lessons.length - 1 ? (
+          <Link
+            href={`/dashboard/lessons/${params.moduleId}/${lessons[lessonIndex + 1].id}`}
+            className="btn-primary flex items-center gap-1.5"
+          >
+            Next Lesson →
+          </Link>
+        ) : (
+          <div />
+        )}
+      </div>
     </div>
   )
 }

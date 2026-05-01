@@ -203,7 +203,10 @@ export default function AdminLessonsPage() {
                 <div className="aspect-video bg-gray-900 rounded-lg overflow-hidden">
                   <iframe
                     className="w-full h-full"
-                    src={`https://www.youtube.com/embed/${form.youtube_url.match(/(?:v=|youtu\.be\/)([^&?/]+)/) ? form.youtube_url.match(/(?:v=|youtu\.be\/)([^&?/]+)/)[1] : form.youtube_url}`}
+                    src={`https://www.youtube.com/embed/${(() => {
+                      const match = form.youtube_url.match(/(?:v=|youtu\.be\/)([^&?/]+)/)
+                      return match ? match[1] : form.youtube_url
+                    })()}`}
                     allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                     allowFullScreen
                   />

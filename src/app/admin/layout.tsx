@@ -3,12 +3,13 @@ import { useEffect } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
 import Link from 'next/link'
 import { useSession } from '@/lib/SessionProvider'
-import { LayoutDashboard, BookOpen, Brain, LogOut, DollarSign, Shield } from 'lucide-react'
+import { LayoutDashboard, BookOpen, Brain, LogOut, DollarSign, Shield, FileText } from 'lucide-react'
 import clsx from 'clsx'
 
 const nav = [
   { href: '/admin', label: 'Overview', icon: LayoutDashboard },
   { href: '/admin/modules', label: 'Modules', icon: BookOpen },
+  { href: '/admin/lessons', label: 'Lessons', icon: FileText },
   { href: '/admin/quizzes', label: 'Quizzes', icon: Brain },
 ]
 

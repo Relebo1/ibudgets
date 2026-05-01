@@ -283,7 +283,6 @@ export async function migrateDB(existingConn?: any) {
       `ALTER TABLE users ADD COLUMN last_login TIMESTAMP NULL DEFAULT NULL`,
       `ALTER TABLE users ADD COLUMN is_admin TINYINT(1) DEFAULT 0`,
       `ALTER TABLE debts ADD COLUMN color VARCHAR(20) DEFAULT '#ef4444'`,
-      `ALTER TABLE lessons ADD COLUMN content LONGTEXT`,
       `ALTER TABLE lessons ADD COLUMN duration_minutes INT DEFAULT 0`,
       `ALTER TABLE modules ADD COLUMN created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP`,
       `ALTER TABLE quizzes ADD COLUMN created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP`,

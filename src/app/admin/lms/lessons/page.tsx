@@ -1,277 +1,419 @@
 'use client'
 import { useEffect, useState } from 'react'
-import Link from 'next/link'
-import { Plus, Trash2, Pencil, BookMarked, X, ArrowLeft, AlertCircle, Youtube, Clock } from 'lucide-react'
+import { Plus, Edit2, Trash2, X, BookMarked, Play, FileText, Layers } from 'lucide-react'
+import RichTextEditor from '@/components/RichTextEditor'
 
-const emptyLesson = (): any => ({
-  module_id: 0,
-  title: '',
-  content: '',
-  youtube_url: '',
-  duration_minutes: 0,
-  order_index: 0,
-})
+const LESSON_TYPES = ['Video', 'Written', 'Mixed']
 
 export default function LessonsPage() {
-  const [modules, setModules] = useState<any[]>([])
   const [lessons, setLessons] = useState<any[]>([])
-  const [selectedModule, setSelectedModule] = useState<number | null>(null)
-  const [view, setView] = useState<'list' | 'editor'>('list')
-  const [editing, setEditing] = useState<any | null>(null)
-  const [form, setForm] = useState(emptyLesson())
-  const [saving, setSaving] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const [deleteId, setDeleteId] = useState<number | null>(null)
+  const [modules, setModules] = useState<any[]>([])
+  const [showModal, setShowModal] = useState(false)
+  const [editingId, setEditingId] = useState<number | null>(null)
+  const [form, setForm] = useState({
+    module_id: '',
+    title: '',
+    lesson_type: 'Mixed',
+    content: '',
+    youtube_url: '',
+    duration_minutes: 0,
+    order_index: 0
+  })
+  const [errors, setErrors] = useState<Record<string, string>>({})
+  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    fetchModules()
+    Promise.all([
+      fetch('/api/admin/lessons').then(r => r.json()),
+      fetch('/api/admin/modules').then(r => r.json()),
+    ]).then(([lessonsData, modulesData]) => {
+      setLessons(lessonsData)
+      setModules(modulesData)
+      setLoading(false)
+    })
   }, [])
 
-  const fetchModules = async () => {
-    try {
-      const res = await fetch('/api/admin/modules')
-      setModules(await res.json())
-    } catch (error) {
-      console.error('Failed to fetch modules:', error)
+  const validateForm = () => {
+    const newErrors: Record<string, string> = {}
+
+    if (!form.title.trim()) newErrors.title = 'Title is required'
+    if (!form.module_id) newErrors.module_id = 'Module is required'
+    if (!form.lesson_type) newErrors.lesson_type = 'Lesson type is required'
+
+    if (form.lesson_type === 'Video') {
+      if (!form.youtube_url?.trim()) newErrors.youtube_url = 'Video URL is required for Video lessons'
+    } else if (form.lesson_type === 'Written') {
+      if (!form.content?.trim()) newErrors.content = 'Content is required for Written lessons'
+    } else if (form.lesson_type === 'Mixed') {
+      if (!form.content?.trim()) newErrors.content = 'Content is required for Mixed lessons'
+      if (!form.youtube_url?.trim()) newErrors.youtube_url = 'Video URL is required for Mixed lessons'
     }
-  }
 
-  const loadLessons = async (moduleId: number) => {
-    try {
-      const res = await fetch(`/api/admin/lessons?moduleId=${moduleId}`)
-      setLessons(await res.json())
-      setSelectedModule(moduleId)
-    } catch (error) {
-      console.error('Failed to fetch lessons:', error)
-    }
-  }
-
-  const openNew = (moduleId: number) => {
-    setEditing(null)
-    setForm({ ...emptyLesson(), module_id: moduleId })
-    setError(null)
-    setView('editor')
-  }
-
-  const openEdit = (lesson: any) => {
-    setEditing(lesson)
-    setForm(lesson)
-    setError(null)
-    setView('editor')
+    setErrors(newErrors)
+    return Object.keys(newErrors).length === 0
   }
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault()
-    setError(null)
+    if (!validateForm()) return
 
-    if (!form.title.trim()) { setError('Title is required'); return }
-    if (!form.content.trim()) { setError('Content is required'); return }
-
-    setSaving(true)
     try {
-      const body = {
-        title: form.title,
-        content: form.content,
-        youtube_url: form.youtube_url,
-        duration_minutes: Number(form.duration_minutes),
-        order_index: Number(form.order_index),
+      const method = editingId ? 'PUT' : 'POST'
+      const url = editingId ? `/api/admin/lessons/${editingId}` : '/api/admin/lessons'
+
+      const res = await fetch(url, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...form,
+          module_id: Number(form.module_id),
+          duration_minutes: Number(form.duration_minutes),
+          order_index: Number(form.order_index)
+        }),
+      })
+
+      if (!res.ok) {
+        const error = await res.json()
+        setErrors({ submit: error.error || 'Failed to save lesson' })
+        return
       }
 
-      if (editing) {
-        await fetch('/api/admin/lessons', {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ id: editing.id, ...body }),
-        })
-      } else {
-        await fetch('/api/admin/lessons', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ moduleId: form.module_id, ...body }),
-        })
-      }
+      setForm({
+        module_id: '',
+        title: '',
+        lesson_type: 'Mixed',
+        content: '',
+        youtube_url: '',
+        duration_minutes: 0,
+        order_index: 0
+      })
+      setErrors({})
+      setEditingId(null)
+      setShowModal(false)
 
-      if (selectedModule) await loadLessons(selectedModule)
-      setView('list')
-    } catch (err) {
-      setError('Failed to save lesson')
-    } finally {
-      setSaving(false)
+      const lessonsData = await fetch('/api/admin/lessons').then(r => r.json())
+      setLessons(lessonsData)
+    } catch (error) {
+      setErrors({ submit: 'Error saving lesson' })
     }
+  }
+
+  const handleEdit = (lesson: any) => {
+    setForm({
+      module_id: lesson.module_id,
+      title: lesson.title,
+      lesson_type: lesson.lesson_type || 'Mixed',
+      content: lesson.content || '',
+      youtube_url: lesson.youtube_url || '',
+      duration_minutes: lesson.duration_minutes || 0,
+      order_index: lesson.order_index || 0
+    })
+    setErrors({})
+    setEditingId(lesson.id)
+    setShowModal(true)
   }
 
   const handleDelete = async (id: number) => {
+    if (!confirm('Delete this lesson? This action cannot be undone.')) return
     try {
-      await fetch(`/api/admin/lessons?id=${id}`, { method: 'DELETE' })
-      if (selectedModule) await loadLessons(selectedModule)
-      setDeleteId(null)
+      await fetch(`/api/admin/lessons/${id}`, { method: 'DELETE' })
+      setLessons(lessons.filter(l => l.id !== id))
     } catch (error) {
-      console.error('Failed to delete lesson:', error)
+      alert('Error deleting lesson')
     }
   }
 
-  if (view === 'editor') {
-    return (
-      <div className="max-w-4xl mx-auto space-y-6">
-        <div className="flex items-center gap-3">
-          <button onClick={() => setView('list')} className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-800 dark:hover:text-gray-200 bg-gray-100 dark:bg-gray-800 px-3 py-1.5 rounded-lg transition-colors">
-            <ArrowLeft className="w-4 h-4" /> Back
-          </button>
-          <h1 className="text-xl font-bold text-gray-900 dark:text-gray-100">{editing ? 'Edit Lesson' : 'New Lesson'}</h1>
-        </div>
+  const groupedLessons = modules.map(m => ({
+    ...m,
+    lessons: lessons.filter(l => l.module_id === m.id).sort((a, b) => a.order_index - b.order_index)
+  }))
 
-        {error && (
-          <div className="flex items-start gap-3 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 px-4 py-3 rounded-xl text-sm">
-            <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
-            {error}
-          </div>
-        )}
+  const getLessonTypeIcon = (type: string) => {
+    switch (type) {
+      case 'Video': return <Play className="w-4 h-4" />
+      case 'Written': return <FileText className="w-4 h-4" />
+      case 'Mixed': return <Layers className="w-4 h-4" />
+      default: return null
+    }
+  }
 
-        <form onSubmit={handleSave} className="space-y-6">
-          <div className="card p-5 space-y-4">
-            <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wide">Lesson Details</h2>
-
-            <div>
-              <label className="block text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1.5">Title <span className="text-red-400">*</span></label>
-              <input className="input" placeholder="e.g. Introduction to Budgeting" value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} required />
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1.5">Duration (minutes)</label>
-                <input className="input" type="number" min="0" value={form.duration_minutes} onChange={e => setForm({ ...form, duration_minutes: e.target.value })} />
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1.5">Order</label>
-                <input className="input" type="number" min="0" value={form.order_index} onChange={e => setForm({ ...form, order_index: e.target.value })} />
-              </div>
-            </div>
-          </div>
-
-          <div className="card p-5 space-y-4">
-            <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wide">Content</h2>
-
-            <div>
-              <label className="block text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1.5">Lesson Content <span className="text-red-400">*</span></label>
-              <textarea className="input resize-none font-mono text-sm" rows={10} placeholder="Write your lesson content here..." value={form.content} onChange={e => setForm({ ...form, content: e.target.value })} required />
-              <p className="text-xs text-gray-400 mt-1">{form.content.length} characters</p>
-            </div>
-          </div>
-
-          <div className="card p-5 space-y-4">
-            <div className="flex items-center gap-2">
-              <Youtube className="w-5 h-5 text-red-500" />
-              <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wide">Video (Optional)</h2>
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1.5">YouTube URL</label>
-              <input className="input" placeholder="https://www.youtube.com/watch?v=..." value={form.youtube_url} onChange={e => setForm({ ...form, youtube_url: e.target.value })} />
-            </div>
-
-            {form.youtube_url && (
-              <div className="bg-gray-50 dark:bg-gray-800 rounded-xl p-4">
-                <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">Preview:</p>
-                <div className="aspect-video bg-gray-900 rounded-lg overflow-hidden">
-                  <iframe className="w-full h-full" src={`https://www.youtube.com/embed/${(() => { const m = form.youtube_url.match(/(?:v=|youtu\.be\/)([^&?/]+)/); return m ? m[1] : form.youtube_url })()}`} allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowFullScreen />
-                </div>
-              </div>
-            )}
-          </div>
-
-          <div className="flex gap-3 pb-8">
-            <button type="button" onClick={() => setView('list')} className="btn-secondary flex-1">Cancel</button>
-            <button type="submit" disabled={saving} className="btn-primary flex-1 disabled:opacity-60">{saving ? 'Saving...' : editing ? 'Save Changes' : 'Create Lesson'}</button>
-          </div>
-        </form>
-      </div>
-    )
+  const getLessonTypeColor = (type: string) => {
+    switch (type) {
+      case 'Video': return 'bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400'
+      case 'Written': return 'bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-400'
+      case 'Mixed': return 'bg-purple-50 dark:bg-purple-900/20 text-purple-700 dark:text-purple-400'
+      default: return ''
+    }
   }
 
   return (
-    <div className="space-y-6 max-w-5xl mx-auto">
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Lessons</h1>
-        <p className="text-sm text-gray-400 mt-1">Create and manage lessons for your modules</p>
+    <div className="space-y-6 max-w-6xl mx-auto">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Lessons Management</h1>
+          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Create and manage lesson content with dynamic types</p>
+        </div>
+        <button
+          onClick={() => {
+            setEditingId(null)
+            setForm({
+              module_id: '',
+              title: '',
+              lesson_type: 'Mixed',
+              content: '',
+              youtube_url: '',
+              duration_minutes: 0,
+              order_index: 0
+            })
+            setErrors({})
+            setShowModal(true)
+          }}
+          className="btn-primary flex items-center gap-2"
+        >
+          <Plus className="w-4 h-4" /> New Lesson
+        </button>
       </div>
 
-      <div className="card p-5">
-        <label className="block text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-2">Select Module</label>
-        <select className="input" value={selectedModule ?? ''} onChange={e => { const id = Number(e.target.value); if (id) loadLessons(id) }}>
-          <option value="">Choose a module...</option>
-          {modules.map(m => <option key={m.id} value={m.id}>{m.title}</option>)}
-        </select>
-      </div>
-
-      {selectedModule && (
-        <>
-          <div className="flex items-center justify-between">
-            <div>
-              <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">{modules.find(m => m.id === selectedModule)?.title}</h2>
-              <p className="text-sm text-gray-400 mt-1">{lessons.length} lessons</p>
-            </div>
-            <button onClick={() => openNew(selectedModule)} className="btn-primary text-sm flex items-center gap-1.5">
-              <Plus className="w-4 h-4" /> New Lesson
-            </button>
-          </div>
-
-          {lessons.length === 0 ? (
-            <div className="card p-12 text-center text-gray-400">
-              <BookMarked className="w-10 h-10 mx-auto mb-3 opacity-30" />
-              <p className="font-medium mb-1">No lessons yet</p>
-              <p className="text-sm mb-5">Create your first lesson for this module</p>
-              <button onClick={() => openNew(selectedModule)} className="btn-primary text-sm inline-flex items-center gap-1.5">
-                <Plus className="w-4 h-4" /> New Lesson
-              </button>
-            </div>
-          ) : (
-            <div className="space-y-3">
-              {lessons.map((lesson, idx) => (
-                <div key={lesson.id} className="card p-5">
-                  <div className="flex items-start gap-4">
-                    <div className="flex-shrink-0 w-10 h-10 rounded-lg bg-brand-50 dark:bg-brand-900/30 flex items-center justify-center">
-                      <span className="text-sm font-bold text-brand-600 dark:text-brand-400">{idx + 1}</span>
-                    </div>
-
-                    <div className="flex-1 min-w-0">
-                      <p className="font-semibold text-gray-900 dark:text-gray-100">{lesson.title}</p>
-                      <div className="flex items-center gap-3 text-xs text-gray-400 mt-2">
-                        <span className="flex items-center gap-1">
-                          <BookMarked className="w-3 h-3" /> {lesson.content.length} chars
-                        </span>
-                        {lesson.youtube_url && <span className="flex items-center gap-1 text-red-500"><Youtube className="w-3 h-3" /> Video</span>}
-                        {lesson.duration_minutes > 0 && <span className="flex items-center gap-1"><Clock className="w-3 h-3" /> {lesson.duration_minutes} min</span>}
+      {loading ? (
+        <div className="text-center py-12 text-gray-500">Loading lessons...</div>
+      ) : groupedLessons.every(m => m.lessons.length === 0) ? (
+        <div className="card p-12 text-center">
+          <BookMarked className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+          <p className="text-gray-500">No lessons yet. Create one to get started.</p>
+        </div>
+      ) : (
+        <div className="space-y-6">
+          {groupedLessons.map(module => (
+            module.lessons.length > 0 && (
+              <div key={module.id} className="card p-6">
+                <h2 className="font-semibold text-gray-900 dark:text-gray-100 mb-4 flex items-center gap-2">
+                  <div className="w-3 h-3 rounded-full" style={{ background: module.color }} />
+                  {module.title}
+                  <span className="text-xs font-normal text-gray-500 dark:text-gray-400 ml-auto">
+                    {module.lessons.length} lesson{module.lessons.length !== 1 ? 's' : ''}
+                  </span>
+                </h2>
+                <div className="space-y-2">
+                  {module.lessons.map((lesson: any, idx: number) => (
+                    <div key={lesson.id} className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-800/50 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
+                      <div className="flex items-start gap-3 flex-1 min-w-0">
+                        <div className="w-8 h-8 rounded-lg bg-brand-100 dark:bg-brand-900/30 flex items-center justify-center flex-shrink-0 text-brand-600 dark:text-brand-400 font-semibold text-sm">
+                          {idx + 1}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="font-medium text-gray-900 dark:text-gray-100 truncate">{lesson.title}</p>
+                          <div className="flex items-center gap-2 mt-2 flex-wrap">
+                            <span className={`px-2 py-1 rounded text-xs font-medium flex items-center gap-1 ${getLessonTypeColor(lesson.lesson_type)}`}>
+                              {getLessonTypeIcon(lesson.lesson_type)}
+                              {lesson.lesson_type}
+                            </span>
+                            {lesson.duration_minutes > 0 && (
+                              <span className="px-2 py-1 bg-gray-200 dark:bg-gray-700 rounded text-xs text-gray-700 dark:text-gray-300">
+                                ⏱️ {lesson.duration_minutes} min
+                              </span>
+                            )}
+                            {lesson.content && (
+                              <span className="px-2 py-1 bg-gray-200 dark:bg-gray-700 rounded text-xs text-gray-700 dark:text-gray-300">
+                                📝 Content
+                              </span>
+                            )}
+                            {lesson.youtube_url && (
+                              <span className="px-2 py-1 bg-gray-200 dark:bg-gray-700 rounded text-xs text-gray-700 dark:text-gray-300">
+                                🎥 Video
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flex gap-2 ml-3 flex-shrink-0">
+                        <button
+                          onClick={() => handleEdit(lesson)}
+                          className="p-2 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg transition-colors"
+                          title="Edit lesson"
+                        >
+                          <Edit2 className="w-4 h-4 text-gray-600 dark:text-gray-400" />
+                        </button>
+                        <button
+                          onClick={() => handleDelete(lesson.id)}
+                          className="p-2 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
+                          title="Delete lesson"
+                        >
+                          <Trash2 className="w-4 h-4 text-red-500" />
+                        </button>
                       </div>
                     </div>
-
-                    <div className="flex items-center gap-2 flex-shrink-0">
-                      <button onClick={() => openEdit(lesson)} className="flex items-center gap-1.5 text-xs font-medium text-brand-600 dark:text-brand-400 bg-brand-50 dark:bg-brand-900/30 hover:bg-brand-100 px-3 py-1.5 rounded-lg transition-colors">
-                        <Pencil className="w-3.5 h-3.5" /> Edit
-                      </button>
-                      <button onClick={() => setDeleteId(lesson.id)} className="w-7 h-7 bg-gray-100 dark:bg-gray-800 hover:bg-red-50 dark:hover:bg-red-950/40 text-gray-500 hover:text-red-500 rounded-lg flex items-center justify-center transition-all">
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  </div>
+                  ))}
                 </div>
-              ))}
-            </div>
-          )}
-        </>
+              </div>
+            )
+          ))}
+        </div>
       )}
 
-      {deleteId && (
+      {showModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
-          <div className="card w-full max-w-sm p-6 shadow-2xl text-center">
-            <div className="w-12 h-12 bg-red-100 dark:bg-red-950/40 rounded-2xl flex items-center justify-center mx-auto mb-4">
-              <Trash2 className="w-6 h-6 text-red-500" />
+          <div className="card w-full max-w-2xl p-6 shadow-2xl max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between mb-5">
+              <h3 className="font-semibold text-gray-900 dark:text-gray-100">
+                {editingId ? 'Edit Lesson' : 'Create New Lesson'}
+              </h3>
+              <button
+                onClick={() => setShowModal(false)}
+                className="w-8 h-8 bg-gray-100 dark:bg-gray-800 rounded-lg flex items-center justify-center text-gray-500 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </button>
             </div>
-            <h3 className="font-semibold text-gray-900 dark:text-gray-100 mb-1">Delete Lesson?</h3>
-            <p className="text-sm text-gray-500 dark:text-gray-400 mb-5">This action cannot be undone.</p>
-            <div className="flex gap-3">
-              <button onClick={() => setDeleteId(null)} className="btn-secondary flex-1">Cancel</button>
-              <button onClick={() => handleDelete(deleteId)} className="flex-1 bg-red-500 hover:bg-red-600 text-white font-medium px-5 py-2.5 rounded-xl transition-all">Delete</button>
-            </div>
+
+            {errors.submit && (
+              <div className="mb-4 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-sm text-red-700 dark:text-red-400">
+                {errors.submit}
+              </div>
+            )}
+
+            <form onSubmit={handleSave} className="space-y-5">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+                    Module <span className="text-red-500">*</span>
+                  </label>
+                  <select
+                    className={`input ${errors.module_id ? 'border-red-500' : ''}`}
+                    value={form.module_id}
+                    onChange={e => {
+                      setForm({ ...form, module_id: e.target.value })
+                      setErrors({ ...errors, module_id: '' })
+                    }}
+                    required
+                  >
+                    <option value="">Select a module</option>
+                    {modules.map(m => <option key={m.id} value={m.id}>{m.title}</option>)}
+                  </select>
+                  {errors.module_id && <p className="text-xs text-red-500 mt-1">{errors.module_id}</p>}
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+                    Lesson Type <span className="text-red-500">*</span>
+                  </label>
+                  <select
+                    className={`input ${errors.lesson_type ? 'border-red-500' : ''}`}
+                    value={form.lesson_type}
+                    onChange={e => {
+                      setForm({ ...form, lesson_type: e.target.value })
+                      setErrors({ ...errors, lesson_type: '', content: '', youtube_url: '' })
+                    }}
+                    required
+                  >
+                    {LESSON_TYPES.map(type => <option key={type}>{type}</option>)}
+                  </select>
+                  {errors.lesson_type && <p className="text-xs text-red-500 mt-1">{errors.lesson_type}</p>}
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+                  Title <span className="text-red-500">*</span>
+                </label>
+                <input
+                  className={`input ${errors.title ? 'border-red-500' : ''}`}
+                  placeholder="e.g. Introduction to Budgeting"
+                  value={form.title}
+                  onChange={e => {
+                    setForm({ ...form, title: e.target.value })
+                    setErrors({ ...errors, title: '' })
+                  }}
+                  maxLength={150}
+                  required
+                />
+                {errors.title && <p className="text-xs text-red-500 mt-1">{errors.title}</p>}
+                <p className="text-xs text-gray-400 mt-1">{form.title.length}/150</p>
+              </div>
+
+              {(form.lesson_type === 'Written' || form.lesson_type === 'Mixed') && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+                    Content {(form.lesson_type === 'Written' || form.lesson_type === 'Mixed') && <span className="text-red-500">*</span>}
+                  </label>
+                  <RichTextEditor
+                    value={form.content}
+                    onChange={content => {
+                      setForm({ ...form, content })
+                      setErrors({ ...errors, content: '' })
+                    }}
+                    placeholder="Enter lesson content (supports markdown)"
+                    maxLength={5000}
+                  />
+                  {errors.content && <p className="text-xs text-red-500 mt-1">{errors.content}</p>}
+                </div>
+              )}
+
+              {(form.lesson_type === 'Video' || form.lesson_type === 'Mixed') && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+                    YouTube URL {(form.lesson_type === 'Video' || form.lesson_type === 'Mixed') && <span className="text-red-500">*</span>}
+                  </label>
+                  <input
+                    className={`input ${errors.youtube_url ? 'border-red-500' : ''}`}
+                    placeholder="https://www.youtube.com/watch?v=dQw4w9WgXcQ"
+                    value={form.youtube_url}
+                    onChange={e => {
+                      setForm({ ...form, youtube_url: e.target.value })
+                      setErrors({ ...errors, youtube_url: '' })
+                    }}
+                  />
+                  {errors.youtube_url && <p className="text-xs text-red-500 mt-1">{errors.youtube_url}</p>}
+                  <p className="text-xs text-gray-400 mt-1">Paste full YouTube URL or video ID</p>
+                </div>
+              )}
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+                    Duration (minutes)
+                  </label>
+                  <input
+                    className="input"
+                    type="number"
+                    value={form.duration_minutes}
+                    onChange={e => setForm({ ...form, duration_minutes: Number(e.target.value) })}
+                    min="0"
+                    max="300"
+                  />
+                  <p className="text-xs text-gray-400 mt-1">Optional</p>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+                    Order (Position)
+                  </label>
+                  <input
+                    className="input"
+                    type="number"
+                    value={form.order_index}
+                    onChange={e => setForm({ ...form, order_index: Number(e.target.value) })}
+                    min="0"
+                  />
+                  <p className="text-xs text-gray-400 mt-1">Lower numbers appear first</p>
+                </div>
+              </div>
+
+              <div className="flex gap-3 pt-4 border-t border-gray-200 dark:border-gray-700">
+                <button
+                  type="button"
+                  onClick={() => setShowModal(false)}
+                  className="btn-secondary flex-1"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="btn-primary flex-1"
+                >
+                  {editingId ? 'Update Lesson' : 'Create Lesson'}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

@@ -1,35 +1,30 @@
 import { NextResponse } from 'next/server'
 import pool from '@/lib/db'
-import { RowDataPacket, ResultSetHeader } from 'mysql2'
+import { RowDataPacket } from 'mysql2'
 
 export async function GET() {
-  const [rows] = await pool.execute<RowDataPacket[]>('SELECT * FROM modules ORDER BY id')
+  const [rows] = await pool.execute<RowDataPacket[]>(
+    `SELECT m.*, COUNT(l.id) as lesson_count
+     FROM modules m
+     LEFT JOIN lessons l ON l.module_id = m.id
+     GROUP BY m.id
+     ORDER BY m.id DESC`
+  )
   return NextResponse.json(rows)
 }
 
 export async function POST(req: Request) {
-  const { title, description, youtube_url, category, duration, difficulty, xpReward, lessons, color } = await req.json()
-  const [result] = await pool.execute<ResultSetHeader>(
-    'INSERT INTO modules (title, description, youtube_url, category, duration, difficulty, xp_reward, lessons, color) VALUES (?,?,?,?,?,?,?,?,?)',
-    [title, description, youtube_url ?? '', category, duration, difficulty, xpReward, lessons, color ?? '#22c55e']
-  )
-  const [rows] = await pool.execute<RowDataPacket[]>('SELECT * FROM modules WHERE id = ?', [result.insertId])
-  return NextResponse.json(rows[0], { status: 201 })
-}
+  const { title, description, category, difficulty, color } = await req.json()
 
-export async function PUT(req: Request) {
-  const { id, title, description, youtube_url, category, duration, difficulty, xpReward, lessons, color } = await req.json()
-  await pool.execute(
-    'UPDATE modules SET title=?, description=?, youtube_url=?, category=?, duration=?, difficulty=?, xp_reward=?, lessons=?, color=? WHERE id=?',
-    [title, description, youtube_url ?? '', category, duration, difficulty, xpReward, lessons, color, id]
-  )
-  const [rows] = await pool.execute<RowDataPacket[]>('SELECT * FROM modules WHERE id = ?', [id])
-  return NextResponse.json(rows[0])
-}
+  if (!title?.trim()) return NextResponse.json({ error: 'Title required' }, { status: 400 })
+  if (!category?.trim()) return NextResponse.json({ error: 'Category required' }, { status: 400 })
 
-export async function DELETE(req: Request) {
-  const { searchParams } = new URL(req.url)
-  const id = searchParams.get('id')
-  await pool.execute('DELETE FROM modules WHERE id = ?', [id])
-  return NextResponse.json({ deleted: id })
+  const [result] = await pool.execute(
+    `INSERT INTO modules (title, description, category, difficulty, color)
+     VALUES (?, ?, ?, ?, ?)`,
+    [title, description || '', category, difficulty || 'Beginner', color || '#22c55e']
+  )
+
+  const id = (result as any).insertId
+  return NextResponse.json({ id, title, description, category, difficulty, color }, { status: 201 })
 }

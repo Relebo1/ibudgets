@@ -1,68 +1,65 @@
 import { NextResponse } from 'next/server'
 import pool from '@/lib/db'
-import { RowDataPacket, ResultSetHeader } from 'mysql2'
+import { RowDataPacket } from 'mysql2'
 
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url)
   const moduleId = searchParams.get('moduleId')
+
+  let sql = `SELECT l.*, m.title as module_title FROM lessons l
+             JOIN modules m ON l.module_id = m.id`
   const params: any[] = []
-  let sql = `SELECT l.*, COUNT(q.id) AS quiz_count FROM lessons l 
-             LEFT JOIN quizzes q ON q.lesson_id = l.id`
-  if (moduleId) { sql += ' WHERE l.module_id = ?'; params.push(moduleId) }
-  sql += ' GROUP BY l.id ORDER BY l.order_index, l.id'
+
+  if (moduleId) {
+    sql += ` WHERE l.module_id = ?`
+    params.push(moduleId)
+  }
+
+  sql += ` ORDER BY l.module_id, l.order_index ASC`
+
   const [rows] = await pool.execute<RowDataPacket[]>(sql, params)
   return NextResponse.json(rows)
 }
 
 export async function POST(req: Request) {
-  const { moduleId, title, description, content, youtube_url, video_duration, order_index } = await req.json()
-  try {
-    const [result] = await pool.execute<ResultSetHeader>(
-      'INSERT INTO lessons (module_id, title, description, content, youtube_url, video_duration, order_index) VALUES (?,?,?,?,?,?,?)',
-      [moduleId, title, description ?? '', content ?? '', youtube_url ?? '', video_duration ?? '', order_index ?? 0]
-    )
-    const [rows] = await pool.execute<RowDataPacket[]>('SELECT * FROM lessons WHERE id = ?', [result.insertId])
-    return NextResponse.json({ ...rows[0], quiz_count: 0 }, { status: 201 })
-  } catch (err: any) {
-    if (err.code === 'ER_BAD_FIELD_ERROR' && err.sqlMessage?.includes('content')) {
-      const [result] = await pool.execute<ResultSetHeader>(
-        'INSERT INTO lessons (module_id, title, description, youtube_url, video_duration, order_index) VALUES (?,?,?,?,?,?)',
-        [moduleId, title, description ?? '', youtube_url ?? '', video_duration ?? '', order_index ?? 0]
-      )
-      const [rows] = await pool.execute<RowDataPacket[]>('SELECT * FROM lessons WHERE id = ?', [result.insertId])
-      return NextResponse.json({ ...rows[0], quiz_count: 0 }, { status: 201 })
-    }
-    throw err
-  }
-}
+  const { module_id, title, lesson_type, content, youtube_url, duration_minutes, order_index } = await req.json()
 
-export async function PUT(req: Request) {
-  const { id, title, description, content, youtube_url, video_duration, order_index } = await req.json()
-  try {
-    await pool.execute(
-      'UPDATE lessons SET title=?, description=?, content=?, youtube_url=?, video_duration=?, order_index=? WHERE id=?',
-      [title, description ?? '', content ?? '', youtube_url ?? '', video_duration ?? '', order_index ?? 0, id]
-    )
-  } catch (err: any) {
-    if (err.code === 'ER_BAD_FIELD_ERROR' && err.sqlMessage?.includes('content')) {
-      await pool.execute(
-        'UPDATE lessons SET title=?, description=?, youtube_url=?, video_duration=?, order_index=? WHERE id=?',
-        [title, description ?? '', youtube_url ?? '', video_duration ?? '', order_index ?? 0, id]
-      )
-    } else {
-      throw err
-    }
-  }
-  const [rows] = await pool.execute<RowDataPacket[]>(
-    'SELECT l.*, COUNT(q.id) AS quiz_count FROM lessons l LEFT JOIN quizzes q ON q.lesson_id = l.id WHERE l.id = ? GROUP BY l.id',
-    [id]
-  )
-  return NextResponse.json(rows[0])
-}
+  if (!module_id) return NextResponse.json({ error: 'Module ID required' }, { status: 400 })
+  if (!title?.trim()) return NextResponse.json({ error: 'Title required' }, { status: 400 })
+  if (!lesson_type) return NextResponse.json({ error: 'Lesson type required' }, { status: 400 })
 
-export async function DELETE(req: Request) {
-  const { searchParams } = new URL(req.url)
-  const id = searchParams.get('id')
-  await pool.execute('DELETE FROM lessons WHERE id = ?', [id])
-  return NextResponse.json({ deleted: id })
+  // Validate based on lesson type
+  if (lesson_type === 'Video' && !youtube_url?.trim()) {
+    return NextResponse.json({ error: 'Video URL required for Video lessons' }, { status: 400 })
+  }
+  if (lesson_type === 'Written' && !content?.trim()) {
+    return NextResponse.json({ error: 'Content required for Written lessons' }, { status: 400 })
+  }
+  if (lesson_type === 'Mixed') {
+    if (!content?.trim()) return NextResponse.json({ error: 'Content required for Mixed lessons' }, { status: 400 })
+    if (!youtube_url?.trim()) return NextResponse.json({ error: 'Video URL required for Mixed lessons' }, { status: 400 })
+  }
+
+  try {
+    const [result] = await pool.execute(
+      `INSERT INTO lessons (module_id, title, lesson_type, content, youtube_url, duration_minutes, order_index)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [module_id, title, lesson_type, content || '', youtube_url || '', duration_minutes || 0, order_index || 0]
+    )
+
+    const id = (result as any).insertId
+    return NextResponse.json({ 
+      id, 
+      module_id, 
+      title, 
+      lesson_type, 
+      content, 
+      youtube_url, 
+      duration_minutes, 
+      order_index 
+    }, { status: 201 })
+  } catch (error) {
+    console.error('Error creating lesson:', error)
+    return NextResponse.json({ error: 'Failed to create lesson' }, { status: 500 })
+  }
 }

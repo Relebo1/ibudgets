@@ -1,47 +1,41 @@
 import { NextResponse } from 'next/server'
 import pool from '@/lib/db'
-import { RowDataPacket, ResultSetHeader } from 'mysql2'
+import { RowDataPacket } from 'mysql2'
 
 export async function GET(req: Request) {
-  const [quizRows] = await pool.execute<RowDataPacket[]>(`
-    SELECT q.*, GROUP_CONCAT(qq.id) as question_ids FROM quizzes q
-    LEFT JOIN quiz_questions qq ON qq.quiz_id = q.id
-    GROUP BY q.id ORDER BY q.id
-  `)
+  const { searchParams } = new URL(req.url)
+  const lessonId = searchParams.get('lessonId')
 
-  const quizzes = await Promise.all(quizRows.map(async (quiz) => {
-    const [qRows] = await pool.execute<RowDataPacket[]>(
-      'SELECT * FROM quiz_questions WHERE quiz_id = ? ORDER BY order_index', [quiz.id]
-    )
-    return { ...quiz, questions: qRows.map(q => ({ ...q, options: JSON.parse(q.options as string) })) }
-  }))
+  let sql = `SELECT q.*, l.title as lesson_title, m.title as module_title, COUNT(qq.id) as question_count
+             FROM quizzes q
+             LEFT JOIN lessons l ON q.lesson_id = l.id
+             LEFT JOIN modules m ON q.module_id = m.id
+             LEFT JOIN quiz_questions qq ON qq.quiz_id = q.id`
+  const params: any[] = []
 
-  return NextResponse.json(quizzes)
+  if (lessonId) {
+    sql += ` WHERE q.lesson_id = ?`
+    params.push(lessonId)
+  }
+
+  sql += ` GROUP BY q.id ORDER BY q.id DESC`
+
+  const [rows] = await pool.execute<RowDataPacket[]>(sql, params)
+  return NextResponse.json(rows)
 }
 
 export async function POST(req: Request) {
-  const { lessonId, title, description, xpReward, timeLimit, color } = await req.json()
-  const [result] = await pool.execute<ResultSetHeader>(
-    'INSERT INTO quizzes (lesson_id, title, description, xp_reward, time_limit, color) VALUES (?,?,?,?,?,?)',
-    [lessonId, title, description, xpReward ?? 100, timeLimit ?? 10, color ?? '#22c55e']
-  )
-  const [rows] = await pool.execute<RowDataPacket[]>('SELECT * FROM quizzes WHERE id = ?', [result.insertId])
-  return NextResponse.json({ ...rows[0], questions: [] }, { status: 201 })
-}
+  const { lesson_id, module_id, title, description, xp_reward, time_limit, color } = await req.json()
 
-export async function PUT(req: Request) {
-  const { id, lessonId, title, description, xpReward, timeLimit, color } = await req.json()
-  await pool.execute(
-    'UPDATE quizzes SET lesson_id=?, title=?, description=?, xp_reward=?, time_limit=?, color=? WHERE id=?',
-    [lessonId, title, description, xpReward, timeLimit, color, id]
-  )
-  const [rows] = await pool.execute<RowDataPacket[]>('SELECT * FROM quizzes WHERE id = ?', [id])
-  return NextResponse.json(rows[0])
-}
+  if (!lesson_id) return NextResponse.json({ error: 'Lesson ID required' }, { status: 400 })
+  if (!title?.trim()) return NextResponse.json({ error: 'Title required' }, { status: 400 })
 
-export async function DELETE(req: Request) {
-  const { searchParams } = new URL(req.url)
-  const id = searchParams.get('id')
-  await pool.execute('DELETE FROM quizzes WHERE id = ?', [id])
-  return NextResponse.json({ deleted: id })
+  const [result] = await pool.execute(
+    `INSERT INTO quizzes (lesson_id, module_id, title, description, xp_reward, time_limit, color)
+     VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    [lesson_id, module_id, title, description || '', xp_reward || 100, time_limit || 10, color || '#22c55e']
+  )
+
+  const id = (result as any).insertId
+  return NextResponse.json({ id, lesson_id, module_id, title, description, xp_reward, time_limit, color }, { status: 201 })
 }

@@ -1,0 +1,49 @@
+import { NextResponse } from 'next/server'
+import pool from '@/lib/db'
+import { RowDataPacket } from 'mysql2'
+
+export async function POST(req: Request, { params }: { params: { quizId: string } }) {
+  const { question, options, correct_index, explanation, order_index } = await req.json()
+  const quizId = params.quizId
+
+  if (!question?.trim()) return NextResponse.json({ error: 'Question required' }, { status: 400 })
+  if (!Array.isArray(options) || options.length < 2) return NextResponse.json({ error: 'At least 2 options required' }, { status: 400 })
+  if (correct_index === undefined || correct_index < 0 || correct_index >= options.length) {
+    return NextResponse.json({ error: 'Valid correct_index required' }, { status: 400 })
+  }
+
+  const [result] = await pool.execute(
+    `INSERT INTO quiz_questions (quiz_id, question, options, correct_index, explanation, order_index)
+     VALUES (?, ?, ?, ?, ?, ?)`,
+    [quizId, question, JSON.stringify(options), correct_index, explanation || '', order_index || 0]
+  )
+
+  const id = (result as any).insertId
+  return NextResponse.json({ id, quiz_id: quizId, question, options, correct_index, explanation, order_index }, { status: 201 })
+}
+
+export async function PUT(req: Request, { params }: { params: { quizId: string } }) {
+  const { questionId, question, options, correct_index, explanation, order_index } = await req.json()
+
+  if (!question?.trim()) return NextResponse.json({ error: 'Question required' }, { status: 400 })
+  if (!Array.isArray(options) || options.length < 2) return NextResponse.json({ error: 'At least 2 options required' }, { status: 400 })
+
+  await pool.execute(
+    `UPDATE quiz_questions SET question = ?, options = ?, correct_index = ?, explanation = ?, order_index = ?
+     WHERE id = ? AND quiz_id = ?`,
+    [question, JSON.stringify(options), correct_index, explanation || '', order_index || 0, questionId, params.quizId]
+  )
+
+  return NextResponse.json({ ok: true })
+}
+
+export async function DELETE(req: Request, { params }: { params: { quizId: string } }) {
+  const { questionId } = await req.json()
+
+  await pool.execute(
+    `DELETE FROM quiz_questions WHERE id = ? AND quiz_id = ?`,
+    [questionId, params.quizId]
+  )
+
+  return NextResponse.json({ ok: true })
+}

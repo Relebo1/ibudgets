@@ -12,21 +12,16 @@ export default function ModuleDetailPage() {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const [moduleRes, lessonsRes] = await Promise.all([
-          fetch(`/api/admin/modules/${moduleId}`),
-          fetch(`/api/admin/lessons?moduleId=${moduleId}`),
-        ])
-        const moduleData = await moduleRes.json()
-        const lessonsData = await lessonsRes.json()
-        setModule(moduleData)
-        setLessons(lessonsData)
-      } finally {
-        setLoading(false)
-      }
-    }
-    fetchData()
+    Promise.all([
+      fetch(`/api/admin/modules/${moduleId}`),
+      fetch(`/api/admin/lessons?moduleId=${moduleId}`),
+    ]).then(async ([moduleRes, lessonsRes]) => {
+      const moduleData = await moduleRes.json()
+      const lessonsData = await lessonsRes.json()
+      setModule(moduleData)
+      setLessons(lessonsData)
+      setLoading(false)
+    })
   }, [moduleId])
 
   if (loading) return <div className="text-center py-12">Loading...</div>
@@ -34,7 +29,7 @@ export default function ModuleDetailPage() {
 
   return (
     <div className="space-y-6 max-w-4xl mx-auto">
-      <Link href="/learn/modules" className="flex items-center gap-2 text-brand-600 dark:text-brand-400 hover:underline">
+      <Link href="/lms/modules" className="flex items-center gap-2 text-brand-600 dark:text-brand-400 hover:underline">
         <ArrowLeft className="w-4 h-4" /> Back to Modules
       </Link>
 
@@ -58,7 +53,7 @@ export default function ModuleDetailPage() {
         <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100 mb-4">Lessons ({lessons.length})</h2>
         <div className="space-y-2">
           {lessons.map((lesson, idx) => (
-            <Link key={lesson.id} href={`/learn/modules/${moduleId}/lessons/${lesson.id}`} className="flex items-center gap-4 p-4 bg-gray-50 dark:bg-gray-800/50 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors group">
+            <Link key={lesson.id} href={`/lms/modules/${moduleId}/lessons/${lesson.id}`} className="flex items-center gap-4 p-4 bg-gray-50 dark:bg-gray-800/50 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors group">
               <div className="w-10 h-10 rounded-lg bg-brand-100 dark:bg-brand-900/30 flex items-center justify-center flex-shrink-0 text-brand-600 dark:text-brand-400 font-semibold">
                 {idx + 1}
               </div>

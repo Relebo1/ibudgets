@@ -5,22 +5,19 @@ import { Plus, Edit2, Trash2, X, Brain, ChevronDown, ChevronUp } from 'lucide-re
 export default function QuizzesPage() {
   const [quizzes, setQuizzes] = useState<any[]>([])
   const [lessons, setLessons] = useState<any[]>([])
-  const [modules, setModules] = useState<any[]>([])
   const [showModal, setShowModal] = useState(false)
   const [editingId, setEditingId] = useState<number | null>(null)
   const [expandedQuiz, setExpandedQuiz] = useState<number | null>(null)
-  const [form, setForm] = useState({ lesson_id: '', module_id: '', title: '', description: '', xp_reward: 100, time_limit: 10, color: '#22c55e' })
+  const [form, setForm] = useState({ lesson_id: '', title: '', description: '', xp_reward: 100, time_limit: 10 })
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     Promise.all([
       fetch('/api/admin/quizzes').then(r => r.json()),
       fetch('/api/admin/lessons').then(r => r.json()),
-      fetch('/api/admin/modules').then(r => r.json()),
-    ]).then(([quizzesData, lessonsData, modulesData]) => {
+    ]).then(([quizzesData, lessonsData]) => {
       setQuizzes(quizzesData)
       setLessons(lessonsData)
-      setModules(modulesData)
       setLoading(false)
     })
   }, [])
@@ -37,12 +34,12 @@ export default function QuizzesPage() {
       const res = await fetch(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...form, lesson_id: Number(form.lesson_id), module_id: Number(form.module_id), xp_reward: Number(form.xp_reward), time_limit: Number(form.time_limit) }),
+        body: JSON.stringify({ ...form, lesson_id: Number(form.lesson_id), xp_reward: Number(form.xp_reward), time_limit: Number(form.time_limit) }),
       })
 
       if (!res.ok) throw new Error('Failed to save')
 
-      setForm({ lesson_id: '', module_id: '', title: '', description: '', xp_reward: 100, time_limit: 10, color: '#22c55e' })
+      setForm({ lesson_id: '', title: '', description: '', xp_reward: 100, time_limit: 10 })
       setEditingId(null)
       setShowModal(false)
 
@@ -54,7 +51,7 @@ export default function QuizzesPage() {
   }
 
   const handleEdit = (quiz: any) => {
-    setForm({ lesson_id: quiz.lesson_id, module_id: quiz.module_id, title: quiz.title, description: quiz.description, xp_reward: quiz.xp_reward, time_limit: quiz.time_limit, color: quiz.color })
+    setForm({ lesson_id: quiz.lesson_id, title: quiz.title, description: quiz.description, xp_reward: quiz.xp_reward, time_limit: quiz.time_limit })
     setEditingId(quiz.id)
     setShowModal(true)
   }
@@ -70,7 +67,6 @@ export default function QuizzesPage() {
   }
 
   const getLessonTitle = (lessonId: number) => lessons.find(l => l.id === lessonId)?.title || 'Unknown'
-  const getModuleTitle = (moduleId: number) => modules.find(m => m.id === moduleId)?.title || 'Unknown'
 
   return (
     <div className="space-y-6 max-w-6xl mx-auto">
@@ -79,7 +75,7 @@ export default function QuizzesPage() {
           <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Quizzes</h1>
           <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Manage quizzes and questions</p>
         </div>
-        <button onClick={() => { setEditingId(null); setForm({ lesson_id: '', module_id: '', title: '', description: '', xp_reward: 100, time_limit: 10, color: '#22c55e' }); setShowModal(true) }} className="btn-primary flex items-center gap-2">
+        <button onClick={() => { setEditingId(null); setForm({ lesson_id: '', title: '', description: '', xp_reward: 100, time_limit: 10 }); setShowModal(true) }} className="btn-primary flex items-center gap-2">
           <Plus className="w-4 h-4" /> New Quiz
         </button>
       </div>
@@ -98,7 +94,7 @@ export default function QuizzesPage() {
               <div className="flex items-center justify-between">
                 <div className="flex-1 min-w-0">
                   <h3 className="font-semibold text-gray-900 dark:text-gray-100">{quiz.title}</h3>
-                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">{getModuleTitle(quiz.module_id)} → {getLessonTitle(quiz.lesson_id)}</p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">{getLessonTitle(quiz.lesson_id)}</p>
                   <div className="flex items-center gap-2 mt-2 text-xs">
                     <span className="px-2 py-1 bg-gray-100 dark:bg-gray-800 rounded text-gray-700 dark:text-gray-300">{quiz.question_count} questions</span>
                     <span className="px-2 py-1 bg-gray-100 dark:bg-gray-800 rounded text-gray-700 dark:text-gray-300">{quiz.xp_reward} XP</span>
@@ -139,7 +135,7 @@ export default function QuizzesPage() {
             <form onSubmit={handleSave} className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Lesson <span className="text-red-500">*</span></label>
-                <select className="input" value={form.lesson_id} onChange={e => { const lesson = lessons.find(l => l.id === Number(e.target.value)); setForm({ ...form, lesson_id: e.target.value, module_id: lesson?.module_id || '' }) }} required>
+                <select className="input" value={form.lesson_id} onChange={e => setForm({ ...form, lesson_id: e.target.value })} required>
                   <option value="">Select a lesson</option>
                   {lessons.map(l => <option key={l.id} value={l.id}>{l.title}</option>)}
                 </select>

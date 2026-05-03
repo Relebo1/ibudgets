@@ -16,7 +16,7 @@ const nav = [
   { href: '/dashboard/savings', label: 'Savings', icon: PiggyBank },
   { href: '/dashboard/debts', label: 'Debts', icon: TrendingDown },
   { href: '/dashboard/simulator', label: 'Simulator', icon: FlaskConical },
-  { href: '/dashboard/modules', label: 'Learn', icon: GraduationCap },
+  { href: '/lms/modules', label: 'Learn', icon: GraduationCap },
 ]
 
 const bottom = [

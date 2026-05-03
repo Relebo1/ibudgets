@@ -6,9 +6,10 @@ export async function POST(req: Request, { params }: { params: { quizId: string 
     const { question, options, correct_index, explanation, order_index } = await req.json()
 
     if (!question?.trim()) return NextResponse.json({ error: 'Question required' }, { status: 400 })
-    if (!Array.isArray(options) || options.length < 2) return NextResponse.json({ error: 'At least 2 options required' }, { status: 400 })
-    if (correct_index === undefined || correct_index < 0 || correct_index >= options.length) {
-      return NextResponse.json({ error: 'Valid correct_index required' }, { status: 400 })
+    if (!Array.isArray(options) || options.length !== 4) return NextResponse.json({ error: 'Exactly 4 options required' }, { status: 400 })
+    if (options.some((o: string) => !o?.trim())) return NextResponse.json({ error: 'All options must be filled' }, { status: 400 })
+    if (correct_index === undefined || correct_index < 0 || correct_index >= 4) {
+      return NextResponse.json({ error: 'Valid correct_index (0-3) required' }, { status: 400 })
     }
 
     const [result] = await pool.execute(
@@ -29,7 +30,11 @@ export async function PUT(req: Request, { params }: { params: { quizId: string }
     const { questionId, question, options, correct_index, explanation, order_index } = await req.json()
 
     if (!question?.trim()) return NextResponse.json({ error: 'Question required' }, { status: 400 })
-    if (!Array.isArray(options) || options.length < 2) return NextResponse.json({ error: 'At least 2 options required' }, { status: 400 })
+    if (!Array.isArray(options) || options.length !== 4) return NextResponse.json({ error: 'Exactly 4 options required' }, { status: 400 })
+    if (options.some((o: string) => !o?.trim())) return NextResponse.json({ error: 'All options must be filled' }, { status: 400 })
+    if (correct_index === undefined || correct_index < 0 || correct_index >= 4) {
+      return NextResponse.json({ error: 'Valid correct_index (0-3) required' }, { status: 400 })
+    }
 
     await pool.execute(
       `UPDATE quiz_questions SET question = ?, options = ?, correct_index = ?, explanation = ?, order_index = ?

@@ -5,18 +5,28 @@ import { RowDataPacket } from 'mysql2'
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url)
   const userId = searchParams.get('userId')
+  const moduleId = searchParams.get('moduleId')
 
-  // Join modules with user progress
-  const [rows] = await pool.execute<RowDataPacket[]>(
-    `SELECT m.*,
-       COALESCE(um.progress, 0)           AS progress,
-       COALESCE(um.completed, 0)          AS completed,
-       COALESCE(um.completed_lessons, 0)  AS completed_lessons
+  let sql = `SELECT m.id, m.title, m.description, m.category, m.difficulty, m.color, m.xp_reward, m.created_at,
+       COALESCE(MAX(um.progress), 0)           AS progress,
+       COALESCE(MAX(um.completed), 0)          AS completed,
+       COALESCE(MAX(um.completed_lessons), 0)  AS completed_lessons,
+       COUNT(DISTINCT l.id)               AS lesson_count,
+       COUNT(DISTINCT q.id)               AS quiz_count
      FROM modules m
      LEFT JOIN user_modules um ON um.module_id = m.id AND um.user_id = ?
-     ORDER BY m.id`,
-    [userId ?? 0]
-  )
+     LEFT JOIN lessons l ON l.module_id = m.id
+     LEFT JOIN quizzes q ON q.module_id = m.id`
+  const params: any[] = [userId ?? 0]
+
+  if (moduleId) {
+    sql += ' WHERE m.id = ?'
+    params.push(moduleId)
+  }
+
+  sql += ' GROUP BY m.id ORDER BY m.id'
+
+  const [rows] = await pool.execute<RowDataPacket[]>(sql, params)
   return NextResponse.json(rows)
 }
 

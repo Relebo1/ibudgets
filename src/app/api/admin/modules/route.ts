@@ -19,19 +19,19 @@ export async function GET() {
 
 export async function POST(req: Request) {
   try {
-    const { title, description, category, difficulty, color } = await req.json()
+    const { title, description, category, difficulty } = await req.json()
 
     if (!title?.trim()) return NextResponse.json({ error: 'Title required' }, { status: 400 })
     if (!category?.trim()) return NextResponse.json({ error: 'Category required' }, { status: 400 })
 
     const [result] = await pool.execute(
-      `INSERT INTO modules (title, description, category, difficulty, color)
-       VALUES (?, ?, ?, ?, ?)`,
-      [title, description || '', category, difficulty || 'Beginner', color || '#22c55e']
+      `INSERT INTO modules (title, description, category, difficulty)
+       VALUES (?, ?, ?, ?)`,
+      [title, description || '', category, difficulty || 'Beginner']
     )
 
     const id = (result as any).insertId
-    return NextResponse.json({ id, title, description, category, difficulty, color }, { status: 201 })
+    return NextResponse.json({ id, title, description, category, difficulty }, { status: 201 })
   } catch (error) {
     return NextResponse.json({ error: 'Failed to create module' }, { status: 500 })
   }

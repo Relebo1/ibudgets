@@ -7,10 +7,10 @@ import { LayoutDashboard, BookOpen, Brain, LogOut, DollarSign, Shield, FileText 
 import clsx from 'clsx'
 
 const nav = [
-  { href: '/admin', label: 'Overview', icon: LayoutDashboard },
-  { href: '/admin/modules', label: 'Modules', icon: BookOpen },
-  { href: '/admin/lessons', label: 'Lessons', icon: FileText },
-  { href: '/admin/quizzes', label: 'Quizzes', icon: Brain },
+  { href: '/admin/lms', label: 'Overview', icon: LayoutDashboard },
+  { href: '/admin/lms/modules', label: 'Modules', icon: BookOpen },
+  { href: '/admin/lms/lessons', label: 'Lessons', icon: FileText },
+  { href: '/admin/lms/quizzes', label: 'Quizzes', icon: Brain },
 ]
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {

@@ -1,18 +1,21 @@
 import mysql from 'mysql2/promise'
 
-const isProduction = !!process.env.DB_HOST && process.env.DB_HOST !== 'localhost'
+const isProduction = process.env.DB_ENV === 'production' || (process.env.NODE_ENV === 'production' && process.env.DB_HOST !== 'localhost')
+const isLocal = process.env.DB_ENV === 'development' || process.env.DB_HOST === 'localhost'
 
-const pool = mysql.createPool({
+const dbConfig = {
   host: process.env.DB_HOST ?? 'localhost',
-  user: process.env.DB_USERNAME ?? process.env.DB_USER ?? 'root',
+  user: process.env.DB_USERNAME ?? 'root',
   password: process.env.DB_PASSWORD ?? 'password1',
-  database: process.env.DB_DATABASE ?? process.env.DB_NAME ?? 'ibudget',
-  port: Number(process.env.DB_PORT ?? 4000),
+  database: process.env.DB_DATABASE ?? 'ibudget',
+  port: Number(process.env.DB_PORT ?? (isProduction ? 4000 : 3306)),
   waitForConnections: true,
-  connectionLimit: 10,
+  connectionLimit: isProduction ? 10 : 5,
   queueLimit: 0,
   ssl: isProduction ? { rejectUnauthorized: true } : undefined,
-})
+} as const
+
+const pool = mysql.createPool(dbConfig)
 
 export default pool
 
@@ -88,18 +91,15 @@ export async function initDB() {
       )
     `)
 
-    // Modules (global, not per-user)
+    // Modules (simplified - only title, description, category, difficulty)
     await conn.execute(`
       CREATE TABLE IF NOT EXISTS modules (
-        id                INT AUTO_INCREMENT PRIMARY KEY,
-        title             VARCHAR(150) NOT NULL,
-        description       TEXT,
-        category          VARCHAR(100) NOT NULL,
-        duration          VARCHAR(30)  DEFAULT '30 min',
-        difficulty        ENUM('Beginner','Intermediate','Advanced') DEFAULT 'Beginner',
-        xp_reward         INT          DEFAULT 100,
-        lessons           INT          DEFAULT 5,
-        color             VARCHAR(20)  DEFAULT '#22c55e'
+        id         INT AUTO_INCREMENT PRIMARY KEY,
+        title      VARCHAR(150) NOT NULL,
+        description TEXT,
+        category   VARCHAR(100) NOT NULL,
+        difficulty ENUM('Beginner','Intermediate','Advanced') DEFAULT 'Beginner',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
     `)
 
@@ -125,9 +125,12 @@ export async function initDB() {
         module_id     INT          NOT NULL,
         title         VARCHAR(150) NOT NULL,
         description   TEXT,
+        content       LONGTEXT,
         youtube_url   VARCHAR(500) DEFAULT '',
-        video_duration VARCHAR(20) DEFAULT '',
+        duration_minutes INT DEFAULT 0,
         order_index   INT          DEFAULT 0,
+        created_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
         FOREIGN KEY (module_id) REFERENCES modules(id) ON DELETE CASCADE
       )
     `)
@@ -155,7 +158,7 @@ export async function initDB() {
         description TEXT,
         xp_reward   INT          DEFAULT 100,
         time_limit  INT          DEFAULT 10,
-        color       VARCHAR(20)  DEFAULT '#22c55e',
+        created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (module_id) REFERENCES modules(id) ON DELETE CASCADE,
         FOREIGN KEY (lesson_id) REFERENCES lessons(id) ON DELETE SET NULL
       )
@@ -252,39 +255,18 @@ export async function migrateDB(existingConn?: any) {
   const conn = existingConn ?? await pool.getConnection()
   const release = !existingConn
   try {
-    // New table creation (safe — IF NOT EXISTS never touches existing tables)
-    await conn.execute(`
-      CREATE TABLE IF NOT EXISTS lessons (
-        id             INT AUTO_INCREMENT PRIMARY KEY,
-        module_id      INT          NOT NULL,
-        title          VARCHAR(150) NOT NULL,
-        description    TEXT,
-        youtube_url    VARCHAR(500) DEFAULT '',
-        video_duration VARCHAR(20)  DEFAULT '',
-        order_index    INT          DEFAULT 0,
-        FOREIGN KEY (module_id) REFERENCES modules(id) ON DELETE CASCADE
-      )
-    `).catch(() => {})
-
-    await conn.execute(`
-      CREATE TABLE IF NOT EXISTS user_lessons (
-        id         INT AUTO_INCREMENT PRIMARY KEY,
-        user_id    INT NOT NULL,
-        lesson_id  INT NOT NULL,
-        completed  TINYINT(1) DEFAULT 0,
-        UNIQUE KEY uq_user_lesson (user_id, lesson_id),
-        FOREIGN KEY (user_id)   REFERENCES users(id)   ON DELETE CASCADE,
-        FOREIGN KEY (lesson_id) REFERENCES lessons(id) ON DELETE CASCADE
-      )
-    `).catch(() => {})
-
-    // Column additions (silently skipped if already present)
+    // Remove old columns from modules if they exist
     const alterations = [
+      `ALTER TABLE modules DROP COLUMN IF EXISTS color`,
+      `ALTER TABLE modules DROP COLUMN IF EXISTS xp_reward`,
+      `ALTER TABLE modules DROP COLUMN IF EXISTS duration`,
+      `ALTER TABLE modules DROP COLUMN IF EXISTS lessons`,
       `ALTER TABLE users ADD COLUMN last_login TIMESTAMP NULL DEFAULT NULL`,
       `ALTER TABLE users ADD COLUMN is_admin TINYINT(1) DEFAULT 0`,
       `ALTER TABLE debts ADD COLUMN color VARCHAR(20) DEFAULT '#ef4444'`,
-      `ALTER TABLE lessons ADD COLUMN duration_minutes INT DEFAULT 0`,
-      `ALTER TABLE modules ADD COLUMN created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP`,
+      `ALTER TABLE lessons ADD COLUMN content LONGTEXT`,
+      `ALTER TABLE lessons ADD COLUMN created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP`,
+      `ALTER TABLE lessons ADD COLUMN updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP`,
       `ALTER TABLE quizzes ADD COLUMN created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP`,
       `ALTER TABLE quiz_questions ADD COLUMN order_index INT DEFAULT 0`,
     ]

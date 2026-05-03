@@ -13,15 +13,20 @@ export default function ModuleDetailPage() {
 
   useEffect(() => {
     Promise.all([
-      fetch(`/api/admin/modules/${moduleId}`),
-      fetch(`/api/admin/lessons?moduleId=${moduleId}`),
-    ]).then(async ([moduleRes, lessonsRes]) => {
-      const moduleData = await moduleRes.json()
+      fetch(`/api/modules?moduleId=${moduleId}`),
+      fetch(`/api/lessons?moduleId=${moduleId}`),
+    ]).then(async ([modulesRes, lessonsRes]) => {
+      const modulesData = await modulesRes.json()
       const lessonsData = await lessonsRes.json()
-      setModule(moduleData)
-      setLessons(lessonsData)
+      setModule(Array.isArray(modulesData) ? modulesData[0] : null)
+      setLessons(Array.isArray(lessonsData) ? lessonsData : [])
       setLoading(false)
     })
+      .catch(() => {
+        setModule(null)
+        setLessons([])
+        setLoading(false)
+      })
   }, [moduleId])
 
   if (loading) return <div className="text-center py-12">Loading...</div>

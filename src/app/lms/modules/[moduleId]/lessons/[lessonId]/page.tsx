@@ -21,20 +21,21 @@ export default function LessonDetailPage() {
   const [completed, setCompleted] = useState(false)
 
   useEffect(() => {
-    Promise.all([
-      fetch(`/api/admin/lessons/${lessonId}`),
-      fetch(`/api/admin/quizzes?lessonId=${lessonId}`),
-    ]).then(async ([lessonRes, quizRes]) => {
-      const lessonData = await lessonRes.json()
-      const quizzesData = await quizRes.json()
-      setLesson(lessonData)
-      if (quizzesData.length > 0) {
-        const quizData = quizzesData[0]
-        setQuiz(quizData)
-        setAnswers(new Array(quizData.question_count || 0).fill(null))
-      }
-      setLoading(false)
-    })
+    fetch(`/api/lessons?lessonId=${lessonId}`)
+      .then(r => r.json())
+      .then(data => {
+        setLesson(data.lesson)
+        if (data.quiz) {
+          setQuiz(data.quiz)
+          setAnswers(new Array(data.quiz.questions?.length || 0).fill(null))
+        }
+        setLoading(false)
+      })
+      .catch(() => {
+        setLesson(null)
+        setQuiz(null)
+        setLoading(false)
+      })
   }, [lessonId])
 
   if (loading) return <div className="text-center py-12">Loading...</div>
@@ -252,6 +253,22 @@ export default function LessonDetailPage() {
   // Lesson view
   return (
     <div className="space-y-6 max-w-4xl mx-auto">
+      <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
+        <Link href="/dashboard" className="hover:text-brand-600 dark:hover:text-brand-400 transition-colors">
+          Dashboard
+        </Link>
+        <span>/</span>
+        <Link href="/lms/modules" className="hover:text-brand-600 dark:hover:text-brand-400 transition-colors">
+          Learning
+        </Link>
+        <span>/</span>
+        <Link href={`/lms/modules/${moduleId}`} className="hover:text-brand-600 dark:hover:text-brand-400 transition-colors">
+          Module
+        </Link>
+        <span>/</span>
+        <span className="text-gray-900 dark:text-gray-100 font-medium">{lesson.title}</span>
+      </div>
+
       <Link href={`/lms/modules/${moduleId}`} className="flex items-center gap-2 text-brand-600 dark:text-brand-400 hover:underline">
         <ArrowLeft className="w-4 h-4" /> Back to Module
       </Link>

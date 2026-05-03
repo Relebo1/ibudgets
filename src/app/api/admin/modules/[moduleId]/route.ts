@@ -22,14 +22,14 @@ export async function GET(req: Request, { params }: { params: { moduleId: string
 
 export async function PUT(req: Request, { params }: { params: { moduleId: string } }) {
   try {
-    const { title, description, category, difficulty, color } = await req.json()
+    const { title, description, category, difficulty } = await req.json()
 
     if (!title?.trim()) return NextResponse.json({ error: 'Title required' }, { status: 400 })
 
     await pool.execute(
-      `UPDATE modules SET title = ?, description = ?, category = ?, difficulty = ?, color = ?
+      `UPDATE modules SET title = ?, description = ?, category = ?, difficulty = ?
        WHERE id = ?`,
-      [title, description || '', category, difficulty, color, params.moduleId]
+      [title, description || '', category, difficulty, params.moduleId]
     )
 
     return NextResponse.json({ ok: true })

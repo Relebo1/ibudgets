@@ -114,13 +114,40 @@ async function initializeTiDB() {
       )`,
     ]
 
+    // Add missing columns to existing tables
+    const alterations = [
+      `ALTER TABLE lessons ADD COLUMN IF NOT EXISTS description TEXT`,
+      `ALTER TABLE lessons ADD COLUMN IF NOT EXISTS content LONGTEXT`,
+      `ALTER TABLE lessons ADD COLUMN IF NOT EXISTS youtube_url VARCHAR(500) DEFAULT ''`,
+      `ALTER TABLE lessons ADD COLUMN IF NOT EXISTS duration_minutes INT DEFAULT 0`,
+      `ALTER TABLE lessons ADD COLUMN IF NOT EXISTS order_index INT DEFAULT 0`,
+      `ALTER TABLE lessons ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP`,
+      `ALTER TABLE quizzes ADD COLUMN IF NOT EXISTS description TEXT`,
+      `ALTER TABLE quizzes ADD COLUMN IF NOT EXISTS color VARCHAR(20) DEFAULT '#22c55e'`,
+      `ALTER TABLE quiz_questions ADD COLUMN IF NOT EXISTS explanation TEXT`,
+      `ALTER TABLE quiz_questions ADD COLUMN IF NOT EXISTS order_index INT DEFAULT 0`,
+    ]
+
+    // Create tables
     for (const sql of migrations) {
       try {
         await conn.execute(sql)
       } catch (err: any) {
         // Ignore "table already exists" errors
         if (!err.message.includes('already exists')) {
-          throw err
+          console.warn('[iBudget] Migration warning:', err.message)
+        }
+      }
+    }
+
+    // Add missing columns
+    for (const sql of alterations) {
+      try {
+        await conn.execute(sql)
+      } catch (err: any) {
+        // Ignore "column already exists" errors
+        if (!err.message.includes('Duplicate column')) {
+          console.warn('[iBudget] Alteration warning:', err.message)
         }
       }
     }

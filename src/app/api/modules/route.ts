@@ -7,7 +7,10 @@ export async function GET(req: Request) {
   const userId = searchParams.get('userId')
   const moduleId = searchParams.get('moduleId')
 
-  let sql = `SELECT m.id, m.title, m.description, m.category, m.difficulty, m.color, m.xp_reward, m.created_at,
+  let sql = `SELECT m.id, m.title, m.description, m.category, m.difficulty,
+       COALESCE(m.color, '#22c55e') AS color,
+       COALESCE(m.xp_reward, 100) AS xp_reward,
+       m.created_at,
        COALESCE(MAX(um.progress), 0)           AS progress,
        COALESCE(MAX(um.completed), 0)          AS completed,
        COALESCE(MAX(um.completed_lessons), 0)  AS completed_lessons,

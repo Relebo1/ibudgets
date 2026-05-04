@@ -21,7 +21,8 @@ export async function GET(req: Request) {
     const [rows] = await pool.execute<RowDataPacket[]>(sql, params)
     return NextResponse.json(rows)
   } catch (error) {
-    return NextResponse.json({ error: 'Failed to fetch lessons' }, { status: 500 })
+    console.error('GET /api/admin/lessons error:', error)
+    return NextResponse.json({ error: 'Failed to fetch lessons', details: String(error) }, { status: 500 })
   }
 }
 
@@ -41,6 +42,7 @@ export async function POST(req: Request) {
     const id = (result as any).insertId
     return NextResponse.json({ id, module_id, title, description, content, youtube_url, duration_minutes, order_index }, { status: 201 })
   } catch (error) {
-    return NextResponse.json({ error: 'Failed to create lesson' }, { status: 500 })
+    console.error('POST /api/admin/lessons error:', error)
+    return NextResponse.json({ error: 'Failed to create lesson', details: String(error) }, { status: 500 })
   }
 }

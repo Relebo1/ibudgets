@@ -14,7 +14,8 @@ export async function GET(req: Request, { params }: { params: { lessonId: string
     if (!lessons.length) return NextResponse.json({ error: 'Lesson not found' }, { status: 404 })
     return NextResponse.json(lessons[0])
   } catch (error) {
-    return NextResponse.json({ error: 'Failed to fetch lesson' }, { status: 500 })
+    console.error('GET /api/admin/lessons/[lessonId] error:', error)
+    return NextResponse.json({ error: 'Failed to fetch lesson', details: String(error) }, { status: 500 })
   }
 }
 
@@ -32,7 +33,8 @@ export async function PUT(req: Request, { params }: { params: { lessonId: string
 
     return NextResponse.json({ ok: true })
   } catch (error) {
-    return NextResponse.json({ error: 'Failed to update lesson' }, { status: 500 })
+    console.error('PUT /api/admin/lessons/[lessonId] error:', error)
+    return NextResponse.json({ error: 'Failed to update lesson', details: String(error) }, { status: 500 })
   }
 }
 
@@ -41,6 +43,7 @@ export async function DELETE(req: Request, { params }: { params: { lessonId: str
     await pool.execute(`DELETE FROM lessons WHERE id = ?`, [params.lessonId])
     return NextResponse.json({ ok: true })
   } catch (error) {
-    return NextResponse.json({ error: 'Failed to delete lesson' }, { status: 500 })
+    console.error('DELETE /api/admin/lessons/[lessonId] error:', error)
+    return NextResponse.json({ error: 'Failed to delete lesson', details: String(error) }, { status: 500 })
   }
 }

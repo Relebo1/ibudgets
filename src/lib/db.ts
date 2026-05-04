@@ -1,4 +1,5 @@
 import mysql from 'mysql2/promise'
+import initLMSTables from './initDB'
 
 const isProduction = process.env.DB_ENV === 'production' || (process.env.NODE_ENV === 'production' && process.env.DB_HOST !== 'localhost')
 const isLocal = process.env.DB_ENV === 'development' || process.env.DB_HOST === 'localhost'
@@ -16,6 +17,19 @@ const dbConfig = {
 } as const
 
 const pool = mysql.createPool(dbConfig)
+
+// Initialize LMS tables on first connection
+let initialized = false
+pool.on('connection', async () => {
+  if (!initialized) {
+    initialized = true
+    try {
+      await initLMSTables()
+    } catch (error) {
+      console.error('[iBudget] Failed to initialize LMS tables:', error)
+    }
+  }
+})
 
 export default pool
 
